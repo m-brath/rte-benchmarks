@@ -371,13 +371,25 @@ if __name__ == "__main__":
     # %% load data
     # =============================================================================
 
-    #get the list with the input
+    #get the list with the input data in the data folder
+    data_files = list(data_folder.glob("*.xml"))
 
+    #get the setup name from the first file
+    setups=[str(df.stem).split('_')[3] for df in data_files]
+    setups=set(setups)
 
+    for setup in setups:
+        print(f'Processing setup: {setup}')
 
-    data_in=pa.xml.load(str(data_folder/level_input_name))
-    aux_in=pa.xml.load(str(data_folder/aux_input_name))
-    setup_name='RFMIP'
+        #get the atm file and aux file for the setup
+        atm_data_name=f'rte-examples-arts_atm{setup}-states.xml'
+        aux_data_name=f'rte-examples-arts_aux_{setup}-states.xml'
 
+        data_in=pa.xml.load(str(data_folder/atm_data_name))
+        aux_in=pa.xml.load(str(data_folder/aux_data_name))
 
-    ds, SW_flx_sim = rte_benchmark_sw(data_in, aux_in, f_grid_sw, results_folder, setup_name, export_results=True)
+        results_folder_setup=results_folder / f'{setup}/'
+        os.makedirs(results_folder_setup, exist_ok=True)
+        
+        _, _ = rte_benchmark_sw(data_in, aux_in, f_grid_sw, results_folder_setup, setup, export_results=True)
+        _, _ = rte_benchmark_lw(data_in, aux_in, f_grid_lw, results_folder_setup, setup, export_results=True)
