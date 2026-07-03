@@ -222,14 +222,14 @@ if __name__ == "__main__":
         print(f"File {i+1}/{len(data_files)}")
 
         data = xr.open_mfdataset(df, engine="netcdf4")
-        name = df.stem
+        name = df.stem.split('-')[0]
 
         convert_rte_to_arts(
             data,
             save_path=script_dir.parent
             / "data"
-            / f"rte-examples-arts_atm_{name}.xml",
+            / f"rte-examples-arts_atm-{name}.xml",
             aux_save_path=script_dir.parent
             / "data"
-            / f"rte-examples-arts_aux_{name}.xml",
+            / f"rte-examples-arts_aux-{name}.xml",
         )
