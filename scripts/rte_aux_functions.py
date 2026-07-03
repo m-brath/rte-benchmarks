@@ -408,7 +408,7 @@ def lin_interp(x, xp, fp):
     return np.interp(x, xp, fp, left=left, right=right)
 
 
-def make_gridded_field(data_temp, species_in_data, p_grid):
+def make_gridded_field(data_temp, species_in_data, p_grid, arts_names=[]):
     """Build an ARTS GriddedField4 from temperature, species, and pressure data.
 
     This helper constructs a pyarts ``GriddedField4`` object containing
@@ -456,7 +456,10 @@ def make_gridded_field(data_temp, species_in_data, p_grid):
     atm_field = pa.arts.GriddedField4()
     
     # set up grids
-    abs_species = [f"abs_species-{key}" for key in species_in_data]
+    if len(arts_names)>0:
+        abs_species = [f"abs_species-{name}" for name in arts_names]
+    else:
+        abs_species = [f"abs_species-{key}" for key in species_in_data]
 
     atm_field.set_grid(0, ["T", "z"] + abs_species)
     atm_field.set_grid(1, p_grid)
@@ -468,6 +471,8 @@ def make_gridded_field(data_temp, species_in_data, p_grid):
 
     #add altitude 
     z0=16e3 * (5 - np.log10(p_grid[0]))
+    if z0<0:
+        z0=0
     atm_field[1,:,0,0]=get_altitude(p_grid, data_temp[:, 0], data_temp[:, h2o_index], z0)
     
     return atm_field

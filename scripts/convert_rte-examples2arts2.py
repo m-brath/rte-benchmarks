@@ -51,6 +51,9 @@ aux_vars = [
     "solar_zenith_angle",
     "surface_albedo",
     "total_solar_irradiance",
+    "variant_index",
+    "column_index",
+
 ]
 
 
@@ -96,6 +99,11 @@ def convert_rte_to_arts(data, save_path, aux_save_path):
         var for var in variables if var in species_conversion_table
     ]
     species_in_data.sort()
+
+    #create ARTS version of species in data
+    species_in_data_arts = [
+        species_conversion_table[species] for species in species_in_data
+    ]
 
     data_arts = [[]] * len(variants) * len(columns)
     aux_data_arts = [[]] * len(variants) * len(columns)
@@ -152,7 +160,8 @@ def convert_rte_to_arts(data, save_path, aux_save_path):
                     )
 
         temp = raf.make_gridded_field(
-            data_temp, species_in_data, p_lev[column_i, :]
+            data_temp, species_in_data, p_lev[column_i, :],
+            arts_names=species_in_data_arts
         )
         data_arts[i] = temp
 
@@ -161,17 +170,22 @@ def convert_rte_to_arts(data, save_path, aux_save_path):
         aux_data = pa.arts.GriddedField1()
 
         for j, aux_var in enumerate(aux_vars):
-            data_aux = data[aux_var].values.astype("double")
+            
+            if aux_var == "variant_index":
+                aux_data_temp[j] = variant_i
+            elif aux_var == "column_index":
+                aux_data_temp[j] = column_i
+            else:                
+                data_aux = data[aux_var].values.astype("double")
+                if np.ndim(data_aux) == 2:
+                    aux_data_temp[j] = data_aux[variant_i, column_i]
+                elif np.ndim(data_aux) == 1:
+                    aux_data_temp[j] = data_aux[column_i]
+                elif np.isscalar(data_aux):
+                    aux_data_temp[j] = data_aux
 
-            if np.ndim(data_aux) == 2:
-                aux_data_temp[j] = data_aux[variant_i, column_i]
-            elif np.ndim(data_aux) == 1:
-                aux_data_temp[j] = data_aux[column_i]
-            elif np.isscalar(data_aux):
-                aux_data_temp[j] = data_aux
-
-        aux_data.set_grid(0, aux_vars)
         aux_data = pa.arts.GriddedField1()
+        aux_data.set_grid(0, aux_vars)        
         aux_data.data = aux_data_temp
         aux_data_arts[i] = aux_data
 
@@ -214,7 +228,7 @@ if __name__ == "__main__":
             data,
             save_path=script_dir.parent
             / "data"
-            / f"rte-examples-arts_{name}.xml",
+            / f"rte-examples-arts_atm_{name}.xml",
             aux_save_path=script_dir.parent
             / "data"
             / f"rte-examples-arts_aux_{name}.xml",

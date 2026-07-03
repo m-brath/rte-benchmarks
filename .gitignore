@@ -3,3 +3,5 @@ data/*
 plots/*
 results/*
 .DS_Store
+.vscode/*
+scripts/cache/*
