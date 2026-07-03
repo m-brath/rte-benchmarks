@@ -71,9 +71,6 @@ def define_abs_species(SW_flxsim, species_list_of_data):
 
     for i, spc in enumerate(species_list_of_data):
 
-        if spc =='O3':
-            print('halt')
-
         temp=[spc_arts for spc_arts in SW_flxsim.line_species_available if spc_arts == spc]
 
         if len(temp)==1:
@@ -233,7 +230,7 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
     # Create xarray dataset
     ds = xr.Dataset(
         {
-            'altitude': (['variant','column','level'], Result['altitude'], {'   units': 'm'}),
+            'altitude': (['variant','column','level'], Result['altitude'], {'units': 'm'}),
             'pressure': (['variant','column','level'], Result['pressure'], {'units': 'Pa'}),
             'flux_clearsky_up': (['variant','column','level'], Result['flux_clearsky_up'], {'units': 'W/m^2'}),
             'flux_clearsky_down': (['variant','column','level'], Result['flux_clearsky_down'], {'units': 'W/m^2'}),
@@ -250,7 +247,7 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
 
     if export_results:
         os.makedirs(results_folder, exist_ok=True)
-        ds.to_netcdf(os.path.join(results_folder,f'RFMIP_fluxes_Nf{n_freqs}.nc'))
+        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_SW_Nf{n_freqs}.nc'))
 
     return ds, SW_flxsim
 
@@ -375,7 +372,7 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
     # Create xarray dataset
     ds = xr.Dataset(
         {
-            'altitude': (['variant','column','level'], Result['altitude'], {'   units': 'm'}),
+            'altitude': (['variant','column','level'], Result['altitude'], {'units': 'm'}),
             'pressure': (['variant','column','level'], Result['pressure'], {'units': 'Pa'}),
             'flux_clearsky_up': (['variant','column','level'], Result['flux_clearsky_up'], {'units': 'W/m^2'}),
             'flux_clearsky_down': (['variant','column','level'], Result['flux_clearsky_down'], {'units': 'W/m^2'}),
@@ -392,7 +389,7 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
 
     if export_results:
         os.makedirs(results_folder, exist_ok=True)
-        ds.to_netcdf(os.path.join(results_folder,f'RFMIP_fluxes_Nf{n_freqs}.nc'))
+        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_LW_Nf{n_freqs}.nc'))
 
     return ds, LW_flxsim
 
@@ -404,10 +401,10 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
 if __name__ == "__main__":
 
     # =============================================================================
-    # %% paths/constants
+    # % paths/constants
     # =============================================================================
 
-    # %% Get the directory where this script is located
+    # % Get the directory where this script is located
     script_dir = pathlib.Path(__file__).parent.resolve()
 
     data_folder=script_dir.parent / "data/"
@@ -416,13 +413,13 @@ if __name__ == "__main__":
     # level_input_name='rte-examples-arts_rfmip-states.xml'
     # aux_input_name='rte-examples-arts_aux_rfmip-states.xml'
 
-    results_folder=script_dir.parent / "../results/"
+    results_folder=script_dir.parent / "results/"
 
     #Define frequencies (wavenumbers) longwave
     #wavenumber range taken from DDQ paper
     wvn_min_lw=10. # cm^-1
     wvn_max_lw=1/2e-6/100  #cm^-1
-    N_wvn_lw=300
+    N_wvn_lw=100
     wvn_lw=np.linspace(wvn_min_lw,wvn_max_lw, N_wvn_lw)
     f_grid_lw=pa.arts.convert.kaycm2freq(wvn_lw)
 
@@ -430,13 +427,13 @@ if __name__ == "__main__":
     #wavenumber range taken from DDQ paper
     wvn_min_sw=1/1e-5/100
     wvn_max_sw=1e5
-    N_wvn_sw=301
+    N_wvn_sw=101
     wvn_sw=np.linspace(wvn_min_sw,wvn_max_sw, N_wvn_sw)
     f_grid_sw=pa.arts.convert.kaycm2freq(wvn_sw)
 
 
     # =============================================================================
-    # %% load data
+    # % load data
     # =============================================================================
 
     #get the list with the input data in the data folder
@@ -444,7 +441,10 @@ if __name__ == "__main__":
 
     #get the setup name from the first file
     setups=[str(df.stem).split('-')[3] for df in data_files]
-    setups=set(setups)
+    setups=list(set(setups))
+    setups.sort()
+
+    # setups=[setups[1]]    
 
     for setup in setups:
         print(f'Processing setup: {setup}')
