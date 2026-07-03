@@ -22,7 +22,22 @@ import xarray as xr
 
 
 def get_Ncols_and_Nvariants(aux_in):
-        
+    """Extract number of columns and variants from auxiliary data.
+    
+    Parameters
+    ----------
+    aux_in : list
+        List of auxiliary data objects containing grid information.
+    
+    Returns
+    -------
+    tuple
+        (N_cols, N_variants, idx_col, idx_var) where:
+        - N_cols : int - Number of columns
+        - N_variants : int - Number of variants
+        - idx_col : int - Index of column_index in grids
+        - idx_var : int - Index of variant_index in grids
+    """
     #find index of columns and variants
     grids=aux_in[0].grids[0]
     idx_col=[i for i, gr in enumerate(grids) if 'column_index' in str(gr)][0]
@@ -38,7 +53,20 @@ def get_Ncols_and_Nvariants(aux_in):
 
 
 def define_abs_species(SW_flxsim, species_list_of_data):
-
+    """Define absorption species for FluxSimulator based on available species.
+    
+    Parameters
+    ----------
+    SW_flxsim : FluxSimulator
+        FluxSimulator object with available line and cross-section species.
+    species_list_of_data : list
+        List of species names to process.
+    
+    Returns
+    -------
+    list
+        List of absorption species names with appropriate suffixes (e.g., '-XFIT').
+    """
     #set abs_species
     abs_species=[]
 
@@ -62,7 +90,30 @@ def define_abs_species(SW_flxsim, species_list_of_data):
 
 
 def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True):
-
+    """Compute shortwave radiative transfer using FluxSimulator.
+    
+    Parameters
+    ----------
+    data_in : list
+        List of atmospheric data objects.
+    aux_in : list
+        List of auxiliary data objects (surface properties, etc.).
+    f_grid : array
+        Frequency grid in Hz.
+    results_folder : str
+        Path to folder for saving results.
+    setup_name : str
+        Name of the setup/scenario.
+    export_results : bool, optional
+        Whether to export results to NetCDF file (default: True).
+    
+    Returns
+    -------
+    tuple
+        (ds, SW_flxsim) where:
+        - ds : xr.Dataset - xarray dataset with computed fluxes
+        - SW_flxsim : FluxSimulator - Shortwave FluxSimulator object
+    """
     # get number of columns and variants in the input data
     N_cols, N_variants, idx_col, idx_var = get_Ncols_and_Nvariants(aux_in)
 
@@ -196,8 +247,33 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
 
     return ds, SW_flxsim
 
-def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True):
-
+def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+    """Compute longwave radiative transfer using FluxSimulator.
+    
+    Parameters
+    ----------
+    data_in : list
+        List of atmospheric data objects.
+    aux_in : list
+        List of auxiliary data objects (surface properties, etc.).
+    f_grid : array
+        Frequency grid in Hz.
+    results_folder : str
+        Path to folder for saving results.
+    setup_name : str
+        Name of the setup/scenario.
+    export_results : bool, optional
+        Whether to export results to NetCDF file (default: True).
+    reverse_vertical_order : bool, optional
+        Whether to reverse vertical order of output arrays (default: True).
+    
+    Returns
+    -------
+    tuple
+        (ds, LW_flxsim) where:
+        - ds : xr.Dataset - xarray dataset with computed fluxes
+        - LW_flxsim : FluxSimulator - Longwave FluxSimulator object
+    """
     # get number of columns and variants in the input data
     N_cols, N_variants, idx_col, idx_var = get_Ncols_and_Nvariants(aux_in)
 
@@ -300,10 +376,19 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
         column_index=int(aux.data[idx_col])
         variant_index=int(aux.data[idx_var])
 
-        Result['altitude'][variant_index,column_index,:]=results_lw['altitude']
-        Result['pressure'][variant_index,column_index,:]=results_lw['pressure']
-        Result['flux_clearsky_up'][variant_index,column_index,:]=results_lw['flux_clearsky_up']
-        Result['flux_clearsky_down'][variant_index,column_index,:]=results_lw['flux_clearsky_down']
+        
+        if reverse_vertical_order:
+            Result['altitude'][variant_index,column_index,:]=results_lw['altitude'][::-1]
+            Result['pressure'][variant_index,column_index,:]=results_lw['pressure'][::-1]
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results_lw['flux_clearsky_up'][::-1]
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results_lw['flux_clearsky_down'][::-1]
+
+        else:
+            Result['altitude'][variant_index,column_index,:]=results_lw['altitude']
+            Result['pressure'][variant_index,column_index,:]=results_lw['pressure']
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results_lw['flux_clearsky_up']
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results_lw['flux_clearsky_down']
+
         Result['spectral_flux_up_TOA'][variant_index,column_index,:]=results_lw['spectral_flux_clearsky_up'][:,-1]
         Result['spectral_flux_down_SFC'][variant_index,column_index,:]=results_lw['spectral_flux_clearsky_down'][:,0]
 
