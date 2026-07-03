@@ -6,9 +6,9 @@ Created on Wed Feb 25 11:24:07 2026
 @author: u242031
 """
 
-import re
+# import re
 import numpy as np
-import periodictable as pt
+# import periodictable as pt
 from scipy import constants as scc
 import pyarts as pa
 
@@ -41,168 +41,21 @@ M_d = 28.965369e-3  # kg mol^-1
 
 R_D = R / M_d  # J K^-1 kg^-1
 
+# Molecular mass of water
+#Value taken from the periodictable python packacge
+#Kienzle, P. A. (2008). Extensible periodic table [Computer Software]
+#https://doi.org/10.5281/zenodo.18809123
+#https://github.com/python-periodictable/periodictable
+M_W=0.01801500001894382
 
-
-# =============================================================================
-# Helper: molecular formula formatter
-# =============================================================================
-
-
-
-def molecular_mass(formula: str) -> float:
-    """Calculate the molar mass of a molecule from its molecular formula.
-
-    The formula must use correct capitalisation (e.g. 'H2O', 'CO2', 'HCl').
-    Use :func:`format_molecular_formula` first if the input case is uncertain.
-
-    Parameters
-    ----------
-    formula : str
-        Properly capitalised molecular formula (e.g. 'CH3Cl', 'HCl', 'N2O').
-
-    Returns
-    -------
-    float
-        Molar mass in g mol⁻¹.
-
-    Examples
-    --------
-    >>> molecular_mass('H2O')   # 18.015
-    >>> molecular_mass('CO2')   # 44.010
-    >>> molecular_mass('HCl')   # 36.461
-    """
-    mass = 0.0
-    for symbol, count in re.findall(r'([A-Z][a-z]?)(\d*)', formula):        
-        if not symbol:
-            continue
-        n = int(count) if count else 1
-        mass += pt.elements.symbol(symbol).mass * n
-    return mass*N_A*m_a, mass
-
-
-def get_species_masses(species: list[str]) -> dict[str, float]:
-    """Return a dict mapping each species formula to its molar mass in g mol⁻¹.
-
-    Parameters
-    ----------
-    species : list[str]
-        List of properly capitalised molecular formula strings, e.g. as
-        returned by :func:`format_species_list`.
-
-    Returns
-    -------
-    dict[str, float]
-        ``{formula: molar_mass_g_per_mol}`` for every entry in *species*.
-
-    Examples
-    --------
-    >>> get_species_masses(['H2O', 'CO2', 'O3'])
-    {'H2O': 18.015, 'CO2': 44.010, 'O3': 47.998}
-    """
-
-    output={}
-    for s in species:
-
-        # hardcode some special cases for CFC-11 and CFC-12
-        if s == 'CFC11':
-            output[s], _ = molecular_mass('CCl3F')
-        elif s == 'CFC12':
-            output[s], _ = molecular_mass('CCl2F2')
-        else:
-            output[s], _ = molecular_mass(s)
-
-    return output
-
-
-# =============================================================================
-# %% aux
-# =============================================================================
-
-def convert_time(data, obs_type):
-    """
-    Convert time variables from a dataset to an array of numpy datetime64 objects.
-    This function extracts time and date information from a dataset containing
-    observation data in either 'arsa' or 'iasi' format, and converts them into
-    numpy datetime64 objects.
-    Parameters
-    ----------
-    data : xarray.Dataset or dict-like
-        The dataset containing the time variables. It must include variables
-        named 'hhmmss{obs_type}' and 'yyyymmdd{obs_type}', where {obs_type}
-        is either 'arsa' or 'iasi'.
-        - 'hhmmss{obs_type}': Time in HHMMSS format (e.g., 123456 for 12:34:56).
-        - 'yyyymmdd{obs_type}': Date in YYYYMMDD format (e.g., 230101 for 2023-01-01).
-          Note: The year is stored as a 2-digit value and 2000 is added to it.
-    obs_type : str
-        The type of observation data. Must be either 'arsa' or 'iasi'.
-    Returns
-    -------
-    numpy.ndarray
-        An array of numpy datetime64 objects representing the converted timestamps
-        in the format 'YYYY-MM-DDTHH:MM:SS'.
-    Raises
-    ------
-    ValueError
-        If `obs_type` is not 'arsa' or 'iasi'.
-    Examples
-    --------
-    >>> import numpy as np
-    >>> import xarray as xr
-    >>> data = xr.Dataset({
-    ...     'hhmmssarsa': ('time', [123456, 235959]),
-    ...     'yyyymmddarsa': ('time', [230101, 231231])
-    ... })
-    >>> convert_time(data, 'arsa')
-    array(['2023-01-01T12:34:56', '2023-12-31T23:59:59'], dtype='datetime64[s]')
-    Notes
-    -----
-    There is a variable shadowing issue in the function: `mm` is first assigned
-    from the time variable ('hhmmss') but is then overwritten by the month value
-    from the date variable ('yyyymmdd'). As a result, the minutes in the output
-    datetime will always reflect the month value, not the actual minutes.
-    """
-
-
-    if not obs_type in ['arsa', 'iasi']:
-        raise ValueError("obs_type must be either 'arsa' or 'iasi'")
-        
-    var_name1 = "hhmmss" + obs_type
-
-    hhmmss = data[var_name1].values.astype(int)
-    hh = hhmmss // 10000
-    mm = (hhmmss % 10000) // 100
-    ss = hhmmss % 100
-
-
-    var_name2 = "yyyymmdd" + obs_type
-
-    yyyymmdd = data[var_name2].values.astype(int)
-    yyyy = yyyymmdd // 10000 +2000
-    mm = (yyyymmdd % 10000) // 100
-    dd = yyyymmdd % 100
-
-    # put them together to a datetime object
-    time = np.array(
-        [
-            np.datetime64(f"{y:04d}-{m:02d}-{d:02d}T{h:02d}:{mi:02d}:{s:02d}")
-            for y, m, d, h, mi, s in zip(yyyy, mm, dd, hh, mm, ss)
-        ]
-    )
-
-    return time
-
-# =============================================================================
-# %% atmospheric 
-# =============================================================================
-
-M_W, _ = molecular_mass("H2O")
+# water vapor gas constant
 R_W = R / M_W
 
 
 def T_virtual(T,r_v):
     """
     Calculate the virtual temperature.
-    The virtual temperature is the temperature that dry air would need to have 
+    The virtual temperature is the temperature that dry air would need to have
     to match the density of a sample of moist air at the same pressure.
     Parameters
     ----------
@@ -218,17 +71,17 @@ def T_virtual(T,r_v):
     -----
     The virtual temperature is calculated using the formula:
         Tv = T * (1 + r_v / epsilon) / (1 + r_v)
-    where epsilon = R_D / R_W is the ratio of the gas constant for dry air (R_D) 
-    to the gas constant for water vapor (R_W), with typical values of 
+    where epsilon = R_D / R_W is the ratio of the gas constant for dry air (R_D)
+    to the gas constant for water vapor (R_W), with typical values of
     R_D = 287.05 J/(kg·K) and R_W = 461.51 J/(kg·K), giving epsilon ≈ 0.622.
-    
+
     """
 
-    
+
     epsilon=R_D/R_W
-    
+
     Tv=T*(1+r_v/epsilon)/(1+r_v)
-    
+
     return Tv
 
 def mixingratio2vmr(r,Mx):
@@ -257,9 +110,9 @@ def mixingratio2vmr(r,Mx):
     >>> Mx = 18.015  # g/mol (water vapor)
     >>> vmr = mixingratio2vmr(r, Mx)
     """
-   
+
     Md=M_d
-    
+
     return r/(r+Mx/Md)
 
 
@@ -297,8 +150,8 @@ def get_altitude(p, T, r_v,z0=0):
         - T_v is the virtual temperature [K], accounting for water vapor
         - d(ln(p)) is the natural log of the pressure ratio between adjacent levels
     The integration starts at the surface (first index) and proceeds upward
-    toward the TOA (last index). 
-    
+    toward the TOA (last index).
+
     Examples
     --------
     >>> import numpy as np
@@ -307,10 +160,10 @@ def get_altitude(p, T, r_v,z0=0):
     >>> r_v = np.zeros_like(T)  # No water vapor
     >>> Z = get_altitude(p, T, r_v, z0=0)
     """
-    
+
     # allocate
     Z = np.zeros_like(T)
-    
+
     # set the surface altitude
     Z[0] = z0
 
@@ -319,7 +172,7 @@ def get_altitude(p, T, r_v,z0=0):
 
     # set the initial height to the surface altitude
     z_h =Z[0]
-    
+
     # have to start the integration at the surface
     for level in ml[1:]:
 
@@ -328,7 +181,7 @@ def get_altitude(p, T, r_v,z0=0):
 
         # compute the logarithmic pressure difference between the current and previous level
         dlog_p = np.log(p[level-1] / p[level])
-        
+
         # integrate the hypsometric equation to get the height at the current level
         z_h = z_h + (t_level * dlog_p)*R_D/g
 
@@ -387,7 +240,7 @@ def lin_interp(x, xp, fp):
 
     # make sure that xp is in ascending order
     if not np.all(np.diff(xp) > 0):
-        
+
         # sort xp and fp in ascending order of xp
         sort_idx = np.argsort(xp)
         xp = xp[sort_idx]
@@ -400,11 +253,11 @@ def lin_interp(x, xp, fp):
     # make sure that x is in ascending order
     if not np.all(np.diff(x) > 0):
         # sort x in ascending order
-        x = np.sort(x)    
-    
+        x = np.sort(x)
+
     left=(3*fp[0]-fp[1])/2
     right=(3*fp[-1]-fp[-2])/2
-    
+
     return np.interp(x, xp, fp, left=left, right=right)
 
 
@@ -450,11 +303,11 @@ def make_gridded_field(data_temp, species_in_data, p_grid, arts_names=[]):
         p_grid = p_grid[::-1]
         data_temp = data_temp[::-1, :]
 
- 
+
 
     # Create a GriddedField4 object
     atm_field = pa.arts.GriddedField4()
-    
+
     # set up grids
     if len(arts_names)>0:
         abs_species = [f"abs_species-{name}" for name in arts_names]
@@ -463,16 +316,20 @@ def make_gridded_field(data_temp, species_in_data, p_grid, arts_names=[]):
 
     atm_field.set_grid(0, ["T", "z"] + abs_species)
     atm_field.set_grid(1, p_grid)
-    atm_field.data = np.zeros((len(atm_field.grids[0]), len(atm_field.grids[1]), 1, 1))    
+    atm_field.data = np.zeros((len(atm_field.grids[0]), len(atm_field.grids[1]), 1, 1))
     atm_field.data[:,:,0,0]=data_temp.T
+
+    #remove any negative values
+    atm_field.data[atm_field.data<0]=0
+
 
     #find the index of the the H2O column in the data_temp array
     h2o_index = species_in_data.index('h2o') + 2
 
-    #add altitude 
+    #add altitude
     z0=16e3 * (5 - np.log10(p_grid[0]))
     if z0<0:
         z0=0
     atm_field[1,:,0,0]=get_altitude(p_grid, data_temp[:, 0], data_temp[:, h2o_index], z0)
-    
+
     return atm_field
