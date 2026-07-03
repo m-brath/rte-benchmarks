@@ -181,6 +181,8 @@ def convert_rte_to_arts(data, save_path, aux_save_path):
                     aux_data_temp[j] = data_aux[variant_i, column_i]
                 elif np.ndim(data_aux) == 1:
                     aux_data_temp[j] = data_aux[column_i]
+                elif np.ndim(data_aux) == 0:
+                    aux_data_temp[j] = np.double(data_aux)
                 elif np.isscalar(data_aux):
                     aux_data_temp[j] = data_aux
 
