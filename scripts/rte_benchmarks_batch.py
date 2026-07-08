@@ -75,5 +75,5 @@ for setup in setups:
     results_folder_setup=results_folder / f'{setup}/'
     os.makedirs(results_folder_setup, exist_ok=True)
 
-    _, _ = raf.rte_benchmark_sw(data_in, aux_in, f_grid_sw, results_folder_setup, setup, export_results=True)
-    _, _ = raf.rte_benchmark_lw(data_in, aux_in, f_grid_lw, results_folder_setup, setup, export_results=True)
+    _, _ = raf.rte_benchmark_batch_sw(data_in, aux_in, f_grid_sw, results_folder_setup, setup, export_results=True)
+    _, _ = raf.rte_benchmark_batch_lw(data_in, aux_in, f_grid_lw, results_folder_setup, setup, export_results=True)
