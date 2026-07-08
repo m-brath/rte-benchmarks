@@ -120,11 +120,11 @@ def convert_rte_to_arts(data, save_path, aux_save_path):
 
         # atmospheric variables
         data_temp = np.zeros((len(levels), len(species_in_data) + 2))
-        data_temp[:, 0] = p_lev[column_i, :]
+        data_temp[:, 0] = p_lev[:, column_i]
         if len(variants) > 1:
-            data_temp[:, 0] = T_lev[variant_i, column_i, :]
+            data_temp[:, 0] = T_lev[variant_i, :, column_i]
         else:
-            data_temp[:, 0] = T_lev[column_i, :]
+            data_temp[:, 0] = T_lev[:, column_i]
 
         for j, species in enumerate(species_in_data):
 
@@ -132,35 +132,35 @@ def convert_rte_to_arts(data, save_path, aux_save_path):
 
             if len(variants) > 1:
                 if temp_data.ndim == 3:
-                    temp_data = temp_data[variant_i, column_i, :]
+                    temp_data = temp_data[variant_i, :, column_i]
                     data_temp[:, j + 2] = raf.lin_interp(
-                        np.log(p_lev[column_i, :]),
-                        np.log(p_lay[column_i, :]),
+                        np.log(p_lev[:, column_i]),
+                        np.log(p_lay[:, column_i]),
                         temp_data,
                     )
 
                 elif temp_data.ndim == 1:
                     temp_data = temp_data[variant_i]
                     data_temp[:, j + 2] = (
-                        np.ones_like(p_lev[column_i, :]) * temp_data
+                        np.ones_like(p_lev[:, column_i]) * temp_data
                     )
 
             else:
                 if temp_data.ndim == 2:
-                    temp_data = temp_data[column_i, :]
+                    temp_data = temp_data[:, column_i]
                     data_temp[:, j + 2] = raf.lin_interp(
-                        np.log(p_lev[column_i, :]),
-                        np.log(p_lay[column_i, :]),
+                        np.log(p_lev[:, column_i]),
+                        np.log(p_lay[:, column_i]),
                         temp_data,
                     )
 
                 elif temp_data.ndim == 1:
                     data_temp[:, j + 2] = (
-                        np.ones_like(p_lev[column_i, :]) * temp_data[0]
+                        np.ones_like(p_lev[:, column_i]) * temp_data[0]
                     )
 
         temp = raf.make_gridded_field(
-            data_temp, species_in_data, p_lev[column_i, :],
+            data_temp, species_in_data, p_lev[:, column_i],
             arts_names=species_in_data_arts
         )
         data_arts[i] = temp

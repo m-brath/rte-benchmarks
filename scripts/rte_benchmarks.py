@@ -31,18 +31,20 @@ results_folder=script_dir.parent / "results/"
 
 #Define frequencies (wavenumbers) longwave
 #wavenumber range taken from DDQ paper
+#but using log spacing
 wvn_min_lw=10. # cm^-1
 wvn_max_lw=1/2e-6/100  #cm^-1
 N_wvn_lw=100
-wvn_lw=np.linspace(wvn_min_lw,wvn_max_lw, N_wvn_lw)
+wvn_lw=np.logspace(np.log10(wvn_min_lw),np.log10(wvn_max_lw), N_wvn_lw)
 f_grid_lw=arts.convert.kaycm2freq(wvn_lw)
 
 #Define frequencies (wavenumbers) shortwave
 #wavenumber range taken from DDQ paper
+#but using log spacing
 wvn_min_sw=1/1e-5/100
 wvn_max_sw=1e5
 N_wvn_sw=101
-wvn_sw=np.linspace(wvn_min_sw,wvn_max_sw, N_wvn_sw)
+wvn_sw=np.logspace(np.log10(wvn_min_sw),np.log10(wvn_max_sw), N_wvn_sw)
 f_grid_sw=arts.convert.kaycm2freq(wvn_sw)
 
 

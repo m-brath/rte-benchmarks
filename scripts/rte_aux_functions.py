@@ -901,7 +901,7 @@ def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, expo
     surface_tempratures = [aux[idx_surf_temp] for aux in auxes]
     geographical_positions = [[0, 0] for aux_i in auxes]
     surface_reflectivities = [[1-aux[idx_surf_emiss]] for aux in auxes]
-    sun_positions = [[1,0,0] for aux_i in auxes]  # Placeholder for sun positions in longwave
+    sun_positions = [[] for aux_i in auxes]  
 
     # add absorption species
     abs_species=define_abs_species(FlxsimBatch, species_list_of_data)
