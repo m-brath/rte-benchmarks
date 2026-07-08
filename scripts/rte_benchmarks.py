@@ -8,6 +8,7 @@
 
 import os
 import pathlib
+import re
 import numpy as np
 import pyarts as pa
 import FluxSimulator as fsm
@@ -84,6 +85,48 @@ def define_abs_species(SW_flxsim, species_list_of_data):
     return abs_species
 
 
+def set_sun_position(SW_flxsim, sza, tsi, atm):
+        
+    #Set sun to get sun parameter
+    SW_flxsim.set_sun()
+    sun_dist=SW_flxsim.get_sun()[0].distance*1.    
+    
+    #set sun position according to Sect 4.1 of star arts paper
+    Toa_altitude = SW_flxsim.ws.refellipsoid.value[0]+atm[1,-1,0,0]
+    phi=sza-np.rad2deg(np.arcsin(Toa_altitude/sun_dist*np.sin(np.pi-np.deg2rad(sza))))
+
+    SW_flxsim.ws.sunsChangeGeometry(distance=sun_dist, latitude=0, longitude=phi, index=0)
+    SW_flxsim.scale_sun_to_specific_TSI_at_TOA(tsi, 0, 0, atm[1,-1,0,0])
+
+def export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder='', export_results=True):
+        # Create xarray dataset
+    ds = xr.Dataset(
+        {
+            'altitude': (['variant','column','level'], Result['altitude'], {'units': 'm'}),
+            'pressure': (['variant','column','level'], Result['pressure'], {'units': 'Pa'}),
+            'flux_clearsky_up': (['variant','column','level'], Result['flux_clearsky_up'], {'units': 'W/m^2'}),
+            'flux_clearsky_down': (['variant','column','level'], Result['flux_clearsky_down'], {'units': 'W/m^2'}),
+            'spectral_flux_up_TOA': (['variant','column','frequency'], Result['spectral_flux_up_TOA'], {'units': 'W/m^2/Hz'}),
+            'spectral_flux_down_SFC': (['variant','column','frequency'], Result['spectral_flux_down_SFC'], {'units': 'W/m^2/Hz'}),
+        },
+        coords={
+            'variant': np.arange(N_variants),
+            'column': np.arange(N_cols),
+            'level': np.arange(n_levels),
+            'frequency': (['frequency'], f_grid, {'units': 'Hz'}),
+        }
+    )
+
+    if export_results:
+        if results_folder=='':
+            results_folder=os.getcwd()
+        os.makedirs(results_folder, exist_ok=True)
+        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_SW_Nf{n_freqs}.nc'))
+
+    return ds
+
+
+
 def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
     """Compute shortwave radiative transfer using FluxSimulator.
 
@@ -121,23 +164,23 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
 
 
     # create FSM-object
-    SW_flxsim = fsm.FluxSimulator(setup_name+'_SW')
+    Flxsim = fsm.FluxSimulator(setup_name+'_SW')
 
     # add absorption species
-    abs_species=define_abs_species(SW_flxsim, species_list_of_data)
-    SW_flxsim.add_species( abs_species, verbose=True)
+    abs_species=define_abs_species(Flxsim, species_list_of_data)
+    Flxsim.add_species( abs_species, verbose=True)
 
-    SW_flxsim.set_frequency_grid(f_grid)
-    SW_flxsim.gas_scattering=True
-    SW_flxsim.emission=False
+    Flxsim.set_frequency_grid(f_grid)
+    Flxsim.gas_scattering=True
+    Flxsim.emission=False
 
     #Set sun to get sun parameter
-    SW_flxsim.set_sun()
-    sun_dist=SW_flxsim.get_sun()[0].distance*1.
+    Flxsim.set_sun()
+    sun_dist=Flxsim.get_sun()[0].distance*1.
 
 
     #calculate LUT
-    SW_flxsim.get_lookuptableBatch(data_in)
+    Flxsim.get_lookuptableBatch(data_in)
 
     # =============================================================================
     # calculate fluxes
@@ -195,14 +238,14 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
         tsi=aux.data[idx_tsi]
 
         #set sun position according to Sect 4.1 of star arts paper
-        Toa_altitude = SW_flxsim.ws.refellipsoid.value[0]+atm[1,-1,0,0]
+        Toa_altitude = Flxsim.ws.refellipsoid.value[0]+atm[1,-1,0,0]
         phi=sza-np.rad2deg(np.arcsin(Toa_altitude/sun_dist*np.sin(np.pi-np.deg2rad(sza))))
 
-        SW_flxsim.ws.sunsChangeGeometry(distance=sun_dist, latitude=0, longitude=phi, index=0)
-        SW_flxsim.scale_sun_to_specific_TSI_at_TOA(tsi, 0, 0, atm[1,-1,0,0])
+        Flxsim.ws.sunsChangeGeometry(distance=sun_dist, latitude=0, longitude=phi, index=0)
+        Flxsim.scale_sun_to_specific_TSI_at_TOA(tsi, 0, 0, atm[1,-1,0,0])
 
 
-        results_sw = SW_flxsim.flux_simulator_single_profile(
+        results = Flxsim.flux_simulator_single_profile(
             atm,
             surface_temperature,
             surface_altitude,
@@ -215,41 +258,23 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
         variant_index=int(aux.data[idx_var])
 
         if reverse_vertical_order:
-            Result['altitude'][variant_index,column_index,:]=results_sw['altitude'][::-1]
-            Result['pressure'][variant_index,column_index,:]=results_sw['pressure'][::-1]
-            Result['flux_clearsky_up'][variant_index,column_index,:]=results_sw['flux_clearsky_up'][::-1]
-            Result['flux_clearsky_down'][variant_index,column_index,:]=results_sw['flux_clearsky_down'][::-1]
+            Result['altitude'][variant_index,column_index,:]=results['altitude'][::-1]
+            Result['pressure'][variant_index,column_index,:]=results['pressure'][::-1]
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results['flux_clearsky_up'][::-1]
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results['flux_clearsky_down'][::-1]
         else:
-            Result['altitude'][variant_index,column_index,:]=results_sw['altitude']
-            Result['pressure'][variant_index,column_index,:]=results_sw['pressure']
-            Result['flux_clearsky_up'][variant_index,column_index,:]=results_sw['flux_clearsky_up']
-            Result['flux_clearsky_down'][variant_index,column_index,:]=results_sw['flux_clearsky_down']
-        Result['spectral_flux_up_TOA'][variant_index,column_index,:]=results_sw['spectral_flux_clearsky_up'][:,-1]
-        Result['spectral_flux_down_SFC'][variant_index,column_index,:]=results_sw['spectral_flux_clearsky_down'][:,0]
+            Result['altitude'][variant_index,column_index,:]=results['altitude']
+            Result['pressure'][variant_index,column_index,:]=results['pressure']
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results['flux_clearsky_up']
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results['flux_clearsky_down']
+        Result['spectral_flux_up_TOA'][variant_index,column_index,:]=results['spectral_flux_clearsky_up'][:,-1]
+        Result['spectral_flux_down_SFC'][variant_index,column_index,:]=results['spectral_flux_clearsky_down'][:,0]
 
-    # Create xarray dataset
-    ds = xr.Dataset(
-        {
-            'altitude': (['variant','column','level'], Result['altitude'], {'units': 'm'}),
-            'pressure': (['variant','column','level'], Result['pressure'], {'units': 'Pa'}),
-            'flux_clearsky_up': (['variant','column','level'], Result['flux_clearsky_up'], {'units': 'W/m^2'}),
-            'flux_clearsky_down': (['variant','column','level'], Result['flux_clearsky_down'], {'units': 'W/m^2'}),
-            'spectral_flux_up_TOA': (['variant','column','frequency'], Result['spectral_flux_up_TOA'], {'units': 'W/m^2/Hz'}),
-            'spectral_flux_down_SFC': (['variant','column','frequency'], Result['spectral_flux_down_SFC'], {'units': 'W/m^2/Hz'}),
-        },
-        coords={
-            'variant': np.arange(N_variants),
-            'column': np.arange(N_cols),
-            'level': np.arange(n_levels),
-            'frequency': (['frequency'], f_grid, {'units': 'Hz'}),
-        }
-    )
+    #Export results to NetCDF
+    ds = export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder, export_results)
 
-    if export_results:
-        os.makedirs(results_folder, exist_ok=True)
-        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_SW_Nf{n_freqs}.nc'))
 
-    return ds, SW_flxsim
+    return ds, Flxsim
 
 def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
     """Compute longwave radiative transfer using FluxSimulator.
@@ -288,18 +313,18 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
 
 
     # create FSM-object
-    LW_flxsim = fsm.FluxSimulator(setup_name+'_LW')
+    Flxsim = fsm.FluxSimulator(setup_name+'_LW')
 
     # add absorption species
-    abs_species=define_abs_species(LW_flxsim, species_list_of_data)
-    LW_flxsim.add_species( abs_species, verbose=True)
+    abs_species=define_abs_species(Flxsim, species_list_of_data)
+    Flxsim.add_species( abs_species, verbose=True)
 
-    LW_flxsim.set_frequency_grid(f_grid)
-    LW_flxsim.gas_scattering=False
-    LW_flxsim.emission=True
+    Flxsim.set_frequency_grid(f_grid)
+    Flxsim.gas_scattering=False
+    Flxsim.emission=True
 
     #calculate LUT
-    LW_flxsim.get_lookuptableBatch(data_in)
+    Flxsim.get_lookuptableBatch(data_in)
 
     # =============================================================================
     # calculate fluxes
@@ -341,7 +366,7 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
         surface_reflectivity=1-aux.data[idx_surf_emiss]
 
 
-        results_lw = LW_flxsim.flux_simulator_single_profile(
+        results = Flxsim.flux_simulator_single_profile(
             atm,
             surface_temperature,
             surface_altitude,
@@ -355,43 +380,26 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
 
 
         if reverse_vertical_order:
-            Result['altitude'][variant_index,column_index,:]=results_lw['altitude'][::-1]
-            Result['pressure'][variant_index,column_index,:]=results_lw['pressure'][::-1]
-            Result['flux_clearsky_up'][variant_index,column_index,:]=results_lw['flux_clearsky_up'][::-1]
-            Result['flux_clearsky_down'][variant_index,column_index,:]=results_lw['flux_clearsky_down'][::-1]
+            Result['altitude'][variant_index,column_index,:]=results['altitude'][::-1]
+            Result['pressure'][variant_index,column_index,:]=results['pressure'][::-1]
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results['flux_clearsky_up'][::-1]
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results['flux_clearsky_down'][::-1]
 
         else:
-            Result['altitude'][variant_index,column_index,:]=results_lw['altitude']
-            Result['pressure'][variant_index,column_index,:]=results_lw['pressure']
-            Result['flux_clearsky_up'][variant_index,column_index,:]=results_lw['flux_clearsky_up']
-            Result['flux_clearsky_down'][variant_index,column_index,:]=results_lw['flux_clearsky_down']
+            Result['altitude'][variant_index,column_index,:]=results['altitude']
+            Result['pressure'][variant_index,column_index,:]=results['pressure']
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results['flux_clearsky_up']
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results['flux_clearsky_down']
 
-        Result['spectral_flux_up_TOA'][variant_index,column_index,:]=results_lw['spectral_flux_clearsky_up'][:,-1]
-        Result['spectral_flux_down_SFC'][variant_index,column_index,:]=results_lw['spectral_flux_clearsky_down'][:,0]
+        Result['spectral_flux_up_TOA'][variant_index,column_index,:]=results['spectral_flux_clearsky_up'][:,-1]
+        Result['spectral_flux_down_SFC'][variant_index,column_index,:]=results['spectral_flux_clearsky_down'][:,0]
 
-    # Create xarray dataset
-    ds = xr.Dataset(
-        {
-            'altitude': (['variant','column','level'], Result['altitude'], {'units': 'm'}),
-            'pressure': (['variant','column','level'], Result['pressure'], {'units': 'Pa'}),
-            'flux_clearsky_up': (['variant','column','level'], Result['flux_clearsky_up'], {'units': 'W/m^2'}),
-            'flux_clearsky_down': (['variant','column','level'], Result['flux_clearsky_down'], {'units': 'W/m^2'}),
-            'spectral_flux_up_TOA': (['variant','column','frequency'], Result['spectral_flux_up_TOA'], {'units': 'W/m^2/Hz'}),
-            'spectral_flux_down_SFC': (['variant','column','frequency'], Result['spectral_flux_down_SFC'], {'units': 'W/m^2/Hz'}),
-        },
-        coords={
-            'variant': np.arange(N_variants),
-            'column': np.arange(N_cols),
-            'level': np.arange(n_levels),
-            'frequency': (['frequency'], f_grid, {'units': 'Hz'}),
-        }
-    )
 
-    if export_results:
-        os.makedirs(results_folder, exist_ok=True)
-        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_LW_Nf{n_freqs}.nc'))
+    #Export results to xarray
+    ds = export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder, export_results)
+    
 
-    return ds, LW_flxsim
+    return ds, Flxsim
 
 
 # =============================================================================
