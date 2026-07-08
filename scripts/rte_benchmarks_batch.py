@@ -28,7 +28,7 @@ data_folder=script_dir.parent / "data/"
 # level_input_name='rte-examples-arts_rfmip-states.xml'
 # aux_input_name='rte-examples-arts_aux_rfmip-states.xml'
 
-results_folder=script_dir.parent / "results_test/"
+results_folder=script_dir.parent / "results/"
 
 #Define frequencies (wavenumbers) longwave
 #wavenumber range taken from DDQ paper
