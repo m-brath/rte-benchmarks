@@ -58,17 +58,6 @@ setups=[str(df.stem).split('-')[3] for df in data_files]
 setups=list(set(setups))
 setups.sort()
 
-setup=setups[1]
-
-#get the atm file and aux file for the setup
-atm_data_name=f'rte-examples-arts_atm-{setup}.xml'
-aux_data_name=f'rte-examples-arts_aux-{setup}.xml'
-
-atms=xml.load(str(data_folder/atm_data_name))
-auxes=xml.load(str(data_folder/aux_data_name))
-
-results_folder_setup=results_folder / f'{setup}/'
-
 # =============================================================================
 # %% run simulations for each setup as batch
 # =============================================================================
