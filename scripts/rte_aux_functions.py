@@ -6,11 +6,14 @@ Created on Wed Feb 25 11:24:07 2026
 @author: u242031
 """
 
-# import re
+
+import os
 import numpy as np
-# import periodictable as pt
 from scipy import constants as scc
+import xarray as xr
 import pyarts as pa
+import FluxSimulator as fsm
+
 
 
 
@@ -25,11 +28,6 @@ R=scc.R
 #gravity
 g=scc.g  # m s^{-2}
 
-#Avogadro constant
-N_A=scc.Avogadro
-
-#atomic mass
-m_a=scc.atomic_mass
 
 # Radius of Earth
 R_e = 6371229  # m
@@ -333,3 +331,617 @@ def make_gridded_field(data_temp, species_in_data, p_grid, arts_names=[]):
     atm_field[1,:,0,0]=get_altitude(p_grid, data_temp[:, 0], data_temp[:, h2o_index], z0)
 
     return atm_field
+
+# =============================================================================
+# pyarts/fluxsim functions
+# =============================================================================
+
+def get_Ncols_and_Nvariants(aux_in):
+    """Extract number of columns and variants from auxiliary data.
+
+    Parameters
+    ----------
+    aux_in : list
+        List of auxiliary data objects containing grid information.
+
+    Returns
+    -------
+    tuple
+        (N_cols, N_variants, idx_col, idx_var) where:
+        - N_cols : int - Number of columns
+        - N_variants : int - Number of variants
+        - idx_col : int - Index of column_index in grids
+        - idx_var : int - Index of variant_index in grids
+    """
+    #find index of columns and variants
+    grids=aux_in[0].grids[0]
+    idx_col=[i for i, gr in enumerate(grids) if 'column_index' in str(gr)][0]
+    idx_var=[i for i, gr in enumerate(grids) if 'variant_index' in str(gr)][0]
+
+    cols=[aux[idx_col] for aux in aux_in]
+    variants=[aux[idx_var] for aux in aux_in]
+
+    N_cols=int(np.max(cols)+1)
+    N_variants=int(np.max(variants)+1)
+
+    return N_cols, N_variants, idx_col, idx_var
+
+
+def define_abs_species(SW_flxsim, species_list_of_data):
+    """Define absorption species for FluxSimulator based on available species.
+
+    Parameters
+    ----------
+    SW_flxsim : FluxSimulator
+        FluxSimulator object with available line and cross-section species.
+    species_list_of_data : list
+        List of species names to process.
+
+    Returns
+    -------
+    list
+        List of absorption species names with appropriate suffixes (e.g., '-XFIT').
+    """
+    #set abs_species
+    abs_species=[]
+
+
+    for i, spc in enumerate(species_list_of_data):
+
+        temp=[spc_arts for spc_arts in SW_flxsim.line_species_available if spc_arts == spc]
+
+        if len(temp)==1:
+            abs_species.append(spc)
+
+        temp=[spc_arts for spc_arts in SW_flxsim.xsec_species_available if spc_arts == spc]
+
+        if len(temp)==1:
+            abs_species.append(spc+'-XFIT')
+
+    return abs_species
+
+
+def set_sun_position(SW_flxsim, sza, tsi, atm):
+        
+    #Set sun to get sun parameter
+    SW_flxsim.set_sun()
+    sun_dist=SW_flxsim.get_sun()[0].distance*1.    
+    
+    #set sun position according to Sect 4.1 of star arts paper
+    Toa_altitude = SW_flxsim.ws.refellipsoid.value[0]+atm[1,-1,0,0]
+    phi=sza-np.rad2deg(np.arcsin(Toa_altitude/sun_dist*np.sin(np.pi-np.deg2rad(sza))))
+
+    SW_flxsim.ws.sunsChangeGeometry(distance=sun_dist, latitude=0, longitude=phi, index=0)
+    SW_flxsim.scale_sun_to_specific_TSI_at_TOA(tsi, 0, 0, atm[1,-1,0,0])
+
+def export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder='', export_results=True):
+        # Create xarray dataset
+    ds = xr.Dataset(
+        {
+            'altitude': (['variant','column','level'], Result['altitude'], {'units': 'm'}),
+            'pressure': (['variant','column','level'], Result['pressure'], {'units': 'Pa'}),
+            'flux_clearsky_up': (['variant','column','level'], Result['flux_clearsky_up'], {'units': 'W/m^2'}),
+            'flux_clearsky_down': (['variant','column','level'], Result['flux_clearsky_down'], {'units': 'W/m^2'}),
+            'spectral_flux_up_TOA': (['variant','column','frequency'], Result['spectral_flux_up_TOA'], {'units': 'W/m^2/Hz'}),
+            'spectral_flux_down_SFC': (['variant','column','frequency'], Result['spectral_flux_down_SFC'], {'units': 'W/m^2/Hz'}),
+        },
+        coords={
+            'variant': np.arange(N_variants),
+            'column': np.arange(N_cols),
+            'level': np.arange(n_levels),
+            'frequency': (['frequency'], f_grid, {'units': 'Hz'}),
+        }
+    )
+
+    if export_results:
+        if results_folder=='':
+            results_folder=os.getcwd()
+        os.makedirs(results_folder, exist_ok=True)
+        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_SW_Nf{n_freqs}.nc'))
+
+    return ds
+
+
+
+def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+    """Compute shortwave radiative transfer using FluxSimulator.
+
+    Parameters
+    ----------
+    data_in : list
+        List of atmospheric data objects.
+    aux_in : list
+        List of auxiliary data objects (surface properties, etc.).
+    f_grid : array
+        Frequency grid in Hz.
+    results_folder : str
+        Path to folder for saving results.
+    setup_name : str
+        Name of the setup/scenario.
+    export_results : bool, optional
+        Whether to export results to NetCDF file (default: True).
+    reverse_vertical_order : bool, optional
+        Whether to reverse vertical order of output arrays (default: True).
+        This is the order of the RFMIP data, which is from top to bottom,
+        while the output of the FluxSimulator is from bottom to top.
+
+    Returns
+    -------
+    tuple
+        (ds, SW_flxsim) where:
+        - ds : xr.Dataset - xarray dataset with computed fluxes
+        - SW_flxsim : FluxSimulator - Shortwave FluxSimulator object
+    """
+    # get number of columns and variants in the input data
+    N_cols, N_variants, idx_col, idx_var = get_Ncols_and_Nvariants(aux_in)
+
+    # get list of species in the input data
+    species_list_of_data=[str(spc).split('-')[1] for spc in data_in[0].grids[0] if 'abs_species' in str(spc)]
+
+
+    # create FSM-object
+    Flxsim = fsm.FluxSimulator(setup_name+'_SW')
+
+    # add absorption species
+    abs_species=define_abs_species(Flxsim, species_list_of_data)
+    Flxsim.add_species( abs_species, verbose=True)
+
+    Flxsim.set_frequency_grid(f_grid)
+    Flxsim.gas_scattering=True
+    Flxsim.emission=False
+
+    #Set sun to get sun parameter
+    Flxsim.set_sun()
+    sun_dist=Flxsim.get_sun()[0].distance*1.
+
+
+    #calculate LUT
+    Flxsim.get_lookuptableBatch(data_in)
+
+    # =============================================================================
+    # calculate fluxes
+    index=0
+
+    #len of atmospheres, levels and frequencies
+    n_atms=len(data_in)
+    n_levels=len(data_in[index].grids[1].value)
+    n_freqs=len(f_grid)
+
+    #Allocate result arrays
+    Result={}
+    Result['altitude']=np.zeros((N_variants, N_cols,n_levels))
+    Result['pressure']=np.zeros((N_variants, N_cols,n_levels))
+    Result['flux_clearsky_up']=np.zeros((N_variants, N_cols,n_levels))
+    Result['flux_clearsky_down']=np.zeros((N_variants, N_cols,n_levels))
+    Result['spectral_flux_up_TOA']=np.zeros((N_variants, N_cols,n_freqs))
+    Result['spectral_flux_down_SFC']=np.zeros((N_variants, N_cols,n_freqs))
+    Result['index']=np.arange(0,n_atms)
+
+
+    #index solar_zenith_angle
+    idx_sza=[idx for idx, gr in enumerate(aux_in[0].grids[0]) if 'solar_zenith_angle' == str(gr)][0]
+
+    #index tota_solar_ittadiance
+    idx_tsi=[idx for idx, gr in enumerate(aux_in[0].grids[0]) if 'total_solar_irradiance' == str(gr)][0]
+
+    #index surface_emissivity
+    idx_surf_emiss=[idx for idx, gr in enumerate(aux_in[0].grids[0]) if 'surface_emissivity' == str(gr)][0]
+
+    #index surface_temperature
+    idx_surf_temp=[idx for idx, gr in enumerate(aux_in[0].grids[0]) if 'surface_temperature' == str(gr)][0]
+
+
+    for index in range(len(data_in)):
+
+        print(f'index: {index}')
+
+        #atmosphere
+        atm=data_in[index]
+        aux=aux_in[index]
+
+        #surface vavariables
+        surface_temperature=aux.data[idx_surf_temp]
+        surface_altitude=atm.data[1,0,0,0]
+        surface_reflectivity_sw=1-aux.data[idx_surf_emiss]
+
+
+        #Solar zenith angle and total solar irradiance of scenario
+        sza=aux.data[idx_sza]
+        if sza>90:
+            print(f'index: {index} - szs:{sza}')
+
+
+        tsi=aux.data[idx_tsi]
+
+        #set sun position according to Sect 4.1 of star arts paper
+        Toa_altitude = Flxsim.ws.refellipsoid.value[0]+atm[1,-1,0,0]
+        phi=sza-np.rad2deg(np.arcsin(Toa_altitude/sun_dist*np.sin(np.pi-np.deg2rad(sza))))
+
+        Flxsim.ws.sunsChangeGeometry(distance=sun_dist, latitude=0, longitude=phi, index=0)
+        Flxsim.scale_sun_to_specific_TSI_at_TOA(tsi, 0, 0, atm[1,-1,0,0])
+
+
+        results = Flxsim.flux_simulator_single_profile(
+            atm,
+            surface_temperature,
+            surface_altitude,
+            surface_reflectivity_sw,
+            geographical_position=[0,0],
+        )
+        #we set the geographical_position to 0,0 because we want to mimic the RFMIP sza
+
+        column_index=int(aux.data[idx_col])
+        variant_index=int(aux.data[idx_var])
+
+        if reverse_vertical_order:
+            Result['altitude'][variant_index,column_index,:]=results['altitude'][::-1]
+            Result['pressure'][variant_index,column_index,:]=results['pressure'][::-1]
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results['flux_clearsky_up'][::-1]
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results['flux_clearsky_down'][::-1]
+        else:
+            Result['altitude'][variant_index,column_index,:]=results['altitude']
+            Result['pressure'][variant_index,column_index,:]=results['pressure']
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results['flux_clearsky_up']
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results['flux_clearsky_down']
+        Result['spectral_flux_up_TOA'][variant_index,column_index,:]=results['spectral_flux_clearsky_up'][:,-1]
+        Result['spectral_flux_down_SFC'][variant_index,column_index,:]=results['spectral_flux_clearsky_down'][:,0]
+
+    #Export results to NetCDF
+    ds = export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder, export_results)
+
+
+    return ds, Flxsim
+
+def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+    """Compute longwave radiative transfer using FluxSimulator.
+
+    Parameters
+    ----------
+    data_in : list
+        List of atmospheric data objects.
+    aux_in : list
+        List of auxiliary data objects (surface properties, etc.).
+    f_grid : array
+        Frequency grid in Hz.
+    results_folder : str
+        Path to folder for saving results.
+    setup_name : str
+        Name of the setup/scenario.
+    export_results : bool, optional
+        Whether to export results to NetCDF file (default: True).
+    reverse_vertical_order : bool, optional
+        Whether to reverse vertical order of output arrays (default: True).
+        This is the order of the RFMIP data, which is from top to bottom,
+        while the output of the FluxSimulator is from bottom to top.
+
+    Returns
+    -------
+    tuple
+        (ds, LW_flxsim) where:
+        - ds : xr.Dataset - xarray dataset with computed fluxes
+        - LW_flxsim : FluxSimulator - Longwave FluxSimulator object
+    """
+    # get number of columns and variants in the input data
+    N_cols, N_variants, idx_col, idx_var = get_Ncols_and_Nvariants(aux_in)
+
+    # get list of species in the input data
+    species_list_of_data=[str(spc).split('-')[1] for spc in data_in[0].grids[0] if 'abs_species' in str(spc)]
+
+
+    # create FSM-object
+    Flxsim = fsm.FluxSimulator(setup_name+'_LW')
+
+    # add absorption species
+    abs_species=define_abs_species(Flxsim, species_list_of_data)
+    Flxsim.add_species( abs_species, verbose=True)
+
+    Flxsim.set_frequency_grid(f_grid)
+    Flxsim.gas_scattering=False
+    Flxsim.emission=True
+
+    #calculate LUT
+    Flxsim.get_lookuptableBatch(data_in)
+
+    # =============================================================================
+    # calculate fluxes
+    index=0
+
+    #len of atmospheres, levels and frequencies
+    n_atms=len(data_in)
+    n_levels=len(data_in[index].grids[1].value)
+    n_freqs=len(f_grid)
+
+    #Allocate result arrays
+    Result={}
+    Result['altitude']=np.zeros((N_variants, N_cols,n_levels))
+    Result['pressure']=np.zeros((N_variants, N_cols,n_levels))
+    Result['flux_clearsky_up']=np.zeros((N_variants, N_cols,n_levels))
+    Result['flux_clearsky_down']=np.zeros((N_variants, N_cols,n_levels))
+    Result['spectral_flux_up_TOA']=np.zeros((N_variants, N_cols,n_freqs))
+    Result['spectral_flux_down_SFC']=np.zeros((N_variants, N_cols,n_freqs))
+    Result['index']=np.arange(0,n_atms)
+
+    #index surface_emissivity
+    idx_surf_emiss=[idx for idx, gr in enumerate(aux_in[0].grids[0]) if 'surface_emissivity' == str(gr)][0]
+
+    #index surface_temperature
+    idx_surf_temp=[idx for idx, gr in enumerate(aux_in[0].grids[0]) if 'surface_temperature' == str(gr)][0]
+
+
+    for index in range(len(data_in)):
+
+        print(f'index: {index}')
+
+        #atmosphere
+        atm=data_in[index]
+        aux=aux_in[index]
+
+        #surface vavariables
+        surface_temperature=aux.data[idx_surf_temp]
+        surface_altitude=atm.data[1,0,0,0]
+        surface_reflectivity=1-aux.data[idx_surf_emiss]
+
+
+        results = Flxsim.flux_simulator_single_profile(
+            atm,
+            surface_temperature,
+            surface_altitude,
+            surface_reflectivity,
+            geographical_position=[0,0],
+        )
+        #we set the geographical_position to 0,0 because we want to mimic the RFMIP sza
+
+        column_index=int(aux.data[idx_col])
+        variant_index=int(aux.data[idx_var])
+
+
+        if reverse_vertical_order:
+            Result['altitude'][variant_index,column_index,:]=results['altitude'][::-1]
+            Result['pressure'][variant_index,column_index,:]=results['pressure'][::-1]
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results['flux_clearsky_up'][::-1]
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results['flux_clearsky_down'][::-1]
+
+        else:
+            Result['altitude'][variant_index,column_index,:]=results['altitude']
+            Result['pressure'][variant_index,column_index,:]=results['pressure']
+            Result['flux_clearsky_up'][variant_index,column_index,:]=results['flux_clearsky_up']
+            Result['flux_clearsky_down'][variant_index,column_index,:]=results['flux_clearsky_down']
+
+        Result['spectral_flux_up_TOA'][variant_index,column_index,:]=results['spectral_flux_clearsky_up'][:,-1]
+        Result['spectral_flux_down_SFC'][variant_index,column_index,:]=results['spectral_flux_clearsky_down'][:,0]
+
+
+    #Export results to xarray
+    ds = export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder, export_results)
+    
+
+    return ds, Flxsim
+
+
+def calc_distance2matchTOATSI(SW_flxsim, atm, latitude, longitude, sza, tsi):
+    """Calculate the distance to match the top-of-atmosphere total solar irradiance.
+
+    Parameters
+    ----------
+    SW_flxsim : FluxSimulator
+        FluxSimulator object with sun parameters.
+    atm : array-like
+        Atmospheric data for the current column.
+    latitude : float
+        Latitude of the location.
+    longitude : float
+        Longitude of the location.
+    sza : float
+        Solar zenith angle in degrees.
+    tsi : float
+        Total solar irradiance value to match.
+
+    Returns
+    -------
+    float
+        Calculated distance to match the TOA total solar irradiance.
+    """
+    
+    try:
+        len(SW_flxsim.ws.suns.value)
+    except:
+        print("No sun source defined!")
+        print("Please define a sun source first!")
+        return 
+
+    #TOA altitude above the reference ellipsoid
+    Toa_altitude = atm[1,-1,0,0]
+
+    distance_new=SW_flxsim.get_sun_distance_to_match_specific_TSI(tsi, latitude, longitude, Toa_altitude)
+
+    phi=sza-np.rad2deg(np.arcsin(Toa_altitude/distance_new*np.sin(np.pi-np.deg2rad(sza))))
+
+    return distance_new, phi
+
+
+def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+
+    #index solar_zenith_angle
+    idx_sza=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'solar_zenith_angle' == str(gr)][0]
+
+    #index tota_solar_ittadiance
+    idx_tsi=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'total_solar_irradiance' == str(gr)][0]
+
+    #index surface_emissivity
+    idx_surf_emiss=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'surface_emissivity' == str(gr)][0]
+
+    #index surface_temperature
+    idx_surf_temp=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'surface_temperature' == str(gr)][0]
+
+
+    # get list of species in the input data
+    species_list_of_data=[str(spc).split('-')[1] for spc in atms[0].grids[0] if 'abs_species' in str(spc)]
+
+    # =============================================================================
+    # the simulation
+    # =============================================================================
+
+    # setup ARTS
+    FlxsimBatch = fsm.FluxSimulator(setup_name+'_Batch_SW')
+    FlxsimBatch.set_frequency_grid(f_grid)
+
+    # some data preparations
+    surface_altitudes = [atm[1,0,0,0] for atm in atms]
+    surface_tempratures = [aux[idx_surf_temp] for aux in auxes]
+    geographical_positions = [[0, 0] for aux_i in auxes]
+    surface_reflectivities = [[1-aux[idx_surf_emiss]] for aux in auxes]
+
+    #calc solar distance and longitudes to match TSI
+    FlxsimBatch.set_sun()
+    sun_positions = []
+
+    for aux, atm in zip(auxes, atms):
+        sza=aux[idx_sza]
+        tsi=aux[idx_tsi]
+        distance, phi=calc_distance2matchTOATSI(FlxsimBatch, atm, 0, 0, sza, tsi)        
+        sun_positions.append([distance, 0, phi])
+
+    # add absorption species
+    abs_species=define_abs_species(FlxsimBatch, species_list_of_data)
+    FlxsimBatch.add_species( abs_species, verbose=True)
+    
+    FlxsimBatch.emission = 0
+    FlxsimBatch.gas_scattering = True
+
+    results = FlxsimBatch.flux_simulator_batch(
+        atms,
+        surface_tempratures,
+        surface_altitudes,
+        surface_reflectivities,
+        geographical_positions,
+        sun_positions,
+        end_index=-1,
+        spectral_output=True
+    )
+
+    #len of atmospheres, levels and frequencies
+    n_levels=len(atms[0].grids[1].value)
+    n_freqs=len(f_grid)
+
+    # get number of columns and variants in the input data
+    N_cols, N_variants, idx_col, idx_var = get_Ncols_and_Nvariants(auxes)
+
+    #Allocate result arrays
+    Result={}
+    Result['altitude']=np.zeros((N_variants, N_cols,n_levels))
+    Result['pressure']=np.zeros((N_variants, N_cols,n_levels))
+    Result['flux_clearsky_up']=np.zeros((N_variants, N_cols,n_levels))
+    Result['flux_clearsky_down']=np.zeros((N_variants, N_cols,n_levels))
+    Result['spectral_flux_up_TOA']=np.zeros((N_variants, N_cols,n_freqs))
+    Result['spectral_flux_down_SFC']=np.zeros((N_variants, N_cols,n_freqs))
+    Result['index']=np.zeros((N_variants, N_cols), dtype=int)
+
+    # Fill the result arrays with the simulation results
+    for i, (atm, aux) in enumerate(zip(atms, auxes)):
+        col_index=int(aux[idx_col])
+        var_index=int(aux[idx_var])
+
+        if reverse_vertical_order:
+            Result['altitude'][var_index, col_index,:]=atm[1,:,0,0][::-1]
+            Result['pressure'][var_index, col_index,:]=atm[2,:,0,0][::-1]
+            Result['flux_clearsky_up'][var_index, col_index,:]=results["array_of_flux_clearsky_up"][i][::-1]
+            Result['flux_clearsky_down'][var_index, col_index,:]=results["array_of_flux_clearsky_down"][i][::-1]
+        else:
+            Result['altitude'][var_index, col_index,:]=atm[1,:,0,0]
+            Result['pressure'][var_index, col_index,:]=atm[2,:,0,0]
+            Result['flux_clearsky_up'][var_index, col_index,:]=results["array_of_flux_clearsky_up"][i]
+            Result['flux_clearsky_down'][var_index, col_index,:]=results["array_of_flux_clearsky_down"][i]
+        Result['spectral_flux_up_TOA'][var_index, col_index,:]=results["array_of_spectral_flux_clearsky_up"][i][:,-1]
+        Result['spectral_flux_down_SFC'][var_index, col_index,:]=results["array_of_spectral_flux_clearsky_down"][i][:,0]
+        Result['index'][var_index, col_index]=results["array_of_index"][i]
+
+
+    ds=export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder, export_results)    
+
+    return ds, FlxsimBatch
+
+def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+
+    #index surface_emissivity
+    idx_surf_emiss=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'surface_emissivity' == str(gr)][0]
+
+    #index surface_temperature
+    idx_surf_temp=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'surface_temperature' == str(gr)][0]
+
+
+    # get list of species in the input data
+    species_list_of_data=[str(spc).split('-')[1] for spc in atms[0].grids[0] if 'abs_species' in str(spc)]
+
+    # =============================================================================
+    # the simulation
+    # =============================================================================
+
+    # setup ARTS
+    FlxsimBatch = fsm.FluxSimulator(setup_name+'_Batch_LW')
+    FlxsimBatch.set_frequency_grid(f_grid)
+
+    # some data preparations
+    surface_altitudes = [atm[1,0,0,0] for atm in atms]
+    surface_tempratures = [aux[idx_surf_temp] for aux in auxes]
+    geographical_positions = [[0, 0] for aux_i in auxes]
+    surface_reflectivities = [[1-aux[idx_surf_emiss]] for aux in auxes]
+    sun_positions = [[1,0,0] for aux_i in auxes]  # Placeholder for sun positions in longwave
+
+    # add absorption species
+    abs_species=define_abs_species(FlxsimBatch, species_list_of_data)
+    FlxsimBatch.add_species( abs_species, verbose=True)
+    
+    FlxsimBatch.emission = 1
+    FlxsimBatch.gas_scattering = False
+
+    results = FlxsimBatch.flux_simulator_batch(
+        atms,
+        surface_tempratures,
+        surface_altitudes,
+        surface_reflectivities,
+        geographical_positions,
+        sun_positions,
+        end_index=-1,
+        spectral_output=True
+    )
+
+    #len of atmospheres, levels and frequencies
+    n_levels=len(atms[0].grids[1].value)
+    n_freqs=len(f_grid)
+
+    # get number of columns and variants in the input data
+    N_cols, N_variants, idx_col, idx_var = get_Ncols_and_Nvariants(auxes)
+
+    #Allocate result arrays
+    Result={}
+    Result['altitude']=np.zeros((N_variants, N_cols,n_levels))
+    Result['pressure']=np.zeros((N_variants, N_cols,n_levels))
+    Result['flux_clearsky_up']=np.zeros((N_variants, N_cols,n_levels))
+    Result['flux_clearsky_down']=np.zeros((N_variants, N_cols,n_levels))
+    Result['spectral_flux_up_TOA']=np.zeros((N_variants, N_cols,n_freqs))
+    Result['spectral_flux_down_SFC']=np.zeros((N_variants, N_cols,n_freqs))
+    Result['index']=np.zeros((N_variants, N_cols), dtype=int)
+
+    # Fill the result arrays with the simulation results
+    for i, (atm, aux) in enumerate(zip(atms, auxes)):
+        col_index=int(aux[idx_col])
+        var_index=int(aux[idx_var])
+
+        if reverse_vertical_order:
+            Result['altitude'][var_index, col_index,:]=atm[1,:,0,0][::-1]
+            Result['pressure'][var_index, col_index,:]=atm[2,:,0,0][::-1]
+            Result['flux_clearsky_up'][var_index, col_index,:]=results["array_of_flux_clearsky_up"][i][::-1]
+            Result['flux_clearsky_down'][var_index, col_index,:]=results["array_of_flux_clearsky_down"][i][::-1]
+        else:
+            Result['altitude'][var_index, col_index,:]=atm[1,:,0,0]
+            Result['pressure'][var_index, col_index,:]=atm[2,:,0,0]
+            Result['flux_clearsky_up'][var_index, col_index,:]=results["array_of_flux_clearsky_up"][i]
+            Result['flux_clearsky_down'][var_index, col_index,:]=results["array_of_flux_clearsky_down"][i]
+        Result['spectral_flux_up_TOA'][var_index, col_index,:]=results["array_of_spectral_flux_clearsky_up"][i][:,-1]
+        Result['spectral_flux_down_SFC'][var_index, col_index,:]=results["array_of_spectral_flux_clearsky_down"][i][:,0]
+        Result['index'][var_index, col_index]=results["array_of_index"][i]
+
+
+    ds=export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder, export_results)    
+
+    return ds, FlxsimBatch
