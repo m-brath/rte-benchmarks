@@ -856,13 +856,13 @@ def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, expo
         var_index=int(aux[idx_var])
 
         if reverse_vertical_order:
-            Result['altitude'][var_index, col_index,:]=atm[1,:,0,0][::-1]
-            Result['pressure'][var_index, col_index,:]=atm[2,:,0,0][::-1]
+            Result['altitude'][var_index, col_index,:]=results['array_of_altitude'][i][::-1]
+            Result['pressure'][var_index, col_index,:]=results['array_of_pressure'][i][::-1]
             Result['flux_clearsky_up'][var_index, col_index,:]=results["array_of_flux_clearsky_up"][i][::-1]
             Result['flux_clearsky_down'][var_index, col_index,:]=results["array_of_flux_clearsky_down"][i][::-1]
         else:
-            Result['altitude'][var_index, col_index,:]=atm[1,:,0,0]
-            Result['pressure'][var_index, col_index,:]=atm[2,:,0,0]
+            Result['altitude'][var_index, col_index,:]=results['array_of_altitude'][i]
+            Result['pressure'][var_index, col_index,:]=results['array_of_pressure'][i]
             Result['flux_clearsky_up'][var_index, col_index,:]=results["array_of_flux_clearsky_up"][i]
             Result['flux_clearsky_down'][var_index, col_index,:]=results["array_of_flux_clearsky_down"][i]
         Result['spectral_flux_up_TOA'][var_index, col_index,:]=results["array_of_spectral_flux_clearsky_up"][i][:,-1]
@@ -946,13 +946,13 @@ def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, expo
         var_index=int(aux[idx_var])
 
         if reverse_vertical_order:
-            Result['altitude'][var_index, col_index,:]=atm[1,:,0,0][::-1]
-            Result['pressure'][var_index, col_index,:]=atm[2,:,0,0][::-1]
+            Result['altitude'][var_index, col_index,:]=results['array_of_altitude'][i][::-1]
+            Result['pressure'][var_index, col_index,:]=results['array_of_pressure'][i][::-1]
             Result['flux_clearsky_up'][var_index, col_index,:]=results["array_of_flux_clearsky_up"][i][::-1]
             Result['flux_clearsky_down'][var_index, col_index,:]=results["array_of_flux_clearsky_down"][i][::-1]
         else:
-            Result['altitude'][var_index, col_index,:]=atm[1,:,0,0]
-            Result['pressure'][var_index, col_index,:]=atm[2,:,0,0]
+            Result['altitude'][var_index, col_index,:]=results['array_of_altitude'][i]
+            Result['pressure'][var_index, col_index,:]=results['array_of_pressure'][i]
             Result['flux_clearsky_up'][var_index, col_index,:]=results["array_of_flux_clearsky_up"][i]
             Result['flux_clearsky_down'][var_index, col_index,:]=results["array_of_flux_clearsky_down"][i]
         Result['spectral_flux_up_TOA'][var_index, col_index,:]=results["array_of_spectral_flux_clearsky_up"][i][:,-1]
