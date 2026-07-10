@@ -4,4 +4,4 @@ results/**/*.nc
 
 .DS_Store
 .vscode/*
-scripts/cache/*
+scripts/cache/**/*.xml*
