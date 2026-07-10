@@ -26,8 +26,8 @@ scripts/         # Python scripts and helper modules
 | File                            | Purpose                                                                  |
 |---------------------------------|--------------------------------------------------------------------------|
 | `convert_rte-examples2arts2.py` | Convert rte-examples netCDF data to ARTS `ArrayOfGriddedField4` XML      |
-| `rte_benchmarks.py`             | Run single-profile SW/LW benchmark simulations                            |
-| `rte_benchmarks_batch.py`       | Run batch SW/LW benchmark simulations (higher spectral resolution)       |
+| `rte_benchmarks.py`             | Run single-profile SW/LW benchmark simulations (slower, more flexible to adjust outputs) |
+| `rte_benchmarks_batch.py`       | Run batch SW/LW benchmark simulations (faster, less flexible)     |
 | `rte_aux_functions.py`          | Auxiliary functions (thermodynamics, unit conversions, flux computations) |
 
 ## Dependencies
