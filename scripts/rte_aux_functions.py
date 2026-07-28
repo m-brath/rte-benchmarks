@@ -468,7 +468,7 @@ def export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, resu
     return ds    
 
 
-def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True, spectral_output=True):
     """Compute shortwave radiative transfer using FluxSimulator.
 
     Parameters
@@ -489,6 +489,9 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
         Whether to reverse vertical order of output arrays (default: True).
         This is the order of the RFMIP data, which is from top to bottom,
         while the output of the FluxSimulator is from bottom to top.
+    spectral_output : bool, optional
+        Whether to compute and export spectrally resolved fluxes at TOA
+        and surface, in addition to the broadband fluxes (default: True).
 
     Returns
     -------
@@ -538,10 +541,12 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
     Result['pressure']=np.zeros((N_variants, n_levels, N_cols))
     Result['flux_clearsky_up']=np.zeros((N_variants,n_levels, N_cols))
     Result['flux_clearsky_down']=np.zeros((N_variants,n_levels, N_cols))
-    Result['spectral_flux_up_TOA']=np.zeros((N_variants,n_freqs, N_cols))    
-    Result['spectral_flux_down_TOA']=np.zeros((N_variants,n_freqs, N_cols))
-    Result['spectral_flux_up_SFC']=np.zeros((N_variants, n_freqs, N_cols))
-    Result['spectral_flux_down_SFC']=np.zeros((N_variants, n_freqs, N_cols))    
+    if spectral_output:
+        Result['spectral_flux_up_TOA']=np.zeros((N_variants,n_freqs, N_cols))    
+        Result['spectral_flux_down_TOA']=np.zeros((N_variants,n_freqs, N_cols))
+        Result['spectral_flux_up_SFC']=np.zeros((N_variants, n_freqs, N_cols))
+        Result['spectral_flux_down_SFC']=np.zeros((N_variants, n_freqs, N_cols))
+
 
 
 
@@ -610,19 +615,25 @@ def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export
             Result['pressure'][variant_index,:,column_index,:]=results['pressure']
             Result['flux_clearsky_up'][variant_index,:,column_index,:]=results['flux_clearsky_up']
             Result['flux_clearsky_down'][variant_index,:,column_index,:]=results['flux_clearsky_down']
-        Result['spectral_flux_up_TOA'][variant_index,:,column_index,:]=results['spectral_flux_clearsky_up'][:,-1]
-        Result['spectral_flux_down_TOA'][variant_index,:,column_index,:]=results['spectral_flux_clearsky_down'][:,-1]
-        Result['spectral_flux_up_SFC'][variant_index,:,column_index,:]=results['spectral_flux_clearsky_up'][:,0]
-        Result['spectral_flux_down_SFC'][variant_index,:,column_index,:]=results['spectral_flux_clearsky_down'][:,0]
+
+        if spectral_output:             
+            Result['spectral_flux_up_TOA'][variant_index,:,column_index,:]=results['spectral_flux_clearsky_up'][:,-1]
+            Result['spectral_flux_down_TOA'][variant_index,:,column_index,:]=results['spectral_flux_clearsky_down'][:,-1]
+            Result['spectral_flux_up_SFC'][variant_index,:,column_index,:]=results['spectral_flux_clearsky_up'][:,0]
+            Result['spectral_flux_down_SFC'][variant_index,:,column_index,:]=results['spectral_flux_clearsky_down'][:,0]
 
     #Export results to NetCDF
     results_folder_SW=results_folder / 'SW'
-    ds = export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_SW, export_results)
+
+    if spectral_output:
+        ds = export_to_xarray_spectral(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_SW, export_results)
+    else:   
+        ds = export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_SW, export_results)
 
 
     return ds, Flxsim
 
-def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True, spectral_output=True):
     """Compute longwave radiative transfer using FluxSimulator.
 
     Parameters
@@ -643,6 +654,9 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
         Whether to reverse vertical order of output arrays (default: True).
         This is the order of the RFMIP data, which is from top to bottom,
         while the output of the FluxSimulator is from bottom to top.
+    spectral_output : bool, optional
+        Whether to compute and export spectrally resolved fluxes at TOA
+        and surface, in addition to the broadband fluxes (default: True).
 
     Returns
     -------
@@ -687,10 +701,11 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
     Result['pressure']=np.zeros((N_variants, n_levels, N_cols))
     Result['flux_clearsky_up']=np.zeros((N_variants,n_levels, N_cols))
     Result['flux_clearsky_down']=np.zeros((N_variants,n_levels, N_cols))
-    Result['spectral_flux_up_TOA']=np.zeros((N_variants,n_freqs, N_cols))    
-    Result['spectral_flux_down_TOA']=np.zeros((N_variants,n_freqs, N_cols))
-    Result['spectral_flux_up_SFC']=np.zeros((N_variants, n_freqs, N_cols))
-    Result['spectral_flux_down_SFC']=np.zeros((N_variants, n_freqs, N_cols))    
+    if spectral_output:
+        Result['spectral_flux_up_TOA']=np.zeros((N_variants,n_freqs, N_cols))    
+        Result['spectral_flux_down_TOA']=np.zeros((N_variants,n_freqs, N_cols))
+        Result['spectral_flux_up_SFC']=np.zeros((N_variants, n_freqs, N_cols))
+        Result['spectral_flux_down_SFC']=np.zeros((N_variants, n_freqs, N_cols))    
 
 
     #index surface_emissivity
@@ -738,17 +753,21 @@ def rte_benchmark_lw(data_in, aux_in, f_grid, results_folder, setup_name, export
             Result['pressure'][variant_index,:,column_index]=results['pressure']
             Result['flux_clearsky_up'][variant_index,:,column_index]=results['flux_clearsky_up']
             Result['flux_clearsky_down'][variant_index,:,column_index]=results['flux_clearsky_down']
-        
-        Result['spectral_flux_down_TOA'][variant_index,:,column_index]=results['spectral_flux_clearsky_down'][:,-1]
-        Result['spectral_flux_up_TOA'][variant_index,:,column_index]=results['spectral_flux_clearsky_up'][:,-1]
-        Result['spectral_flux_down_SFC'][variant_index,:,column_index]=results['spectral_flux_clearsky_down'][:,0]        
-        Result['spectral_flux_up_SFC'][variant_index,:,column_index]=results['spectral_flux_clearsky_up'][:,0]
+
+        if spectral_output:
+            Result['spectral_flux_down_TOA'][variant_index,:,column_index]=results['spectral_flux_clearsky_down'][:,-1]
+            Result['spectral_flux_up_TOA'][variant_index,:,column_index]=results['spectral_flux_clearsky_up'][:,-1]
+            Result['spectral_flux_down_SFC'][variant_index,:,column_index]=results['spectral_flux_clearsky_down'][:,0]        
+            Result['spectral_flux_up_SFC'][variant_index,:,column_index]=results['spectral_flux_clearsky_up'][:,0]
 
 
     #Export results to xarray
     ressults_folder_LW=results_folder / 'LW'
-    ds = export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, ressults_folder_LW, export_results)
-    
+
+    if spectral_output:
+        ds = export_to_xarray_spectral(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, ressults_folder_LW, export_results)
+    else:
+        ds = export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, ressults_folder_LW, export_results)    
 
     return ds, Flxsim
 
@@ -795,6 +814,43 @@ def calc_distance2matchTOATSI(SW_flxsim, atm, latitude, longitude, sza, tsi):
 
 
 def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True, spectral_output=True):
+    """
+    Run a batch of shortwave (SW) radiative transfer benchmark simulations.
+
+    Parameters
+    ----------
+    atms : list
+        List of atmospheric field tensors, each containing the atmospheric state
+        (e.g., temperature, pressure, absorbing species) for one batch element.
+    auxes : list
+        List of auxiliary data tensors containing simulation parameters such as
+        solar zenith angle, total solar irradiance, surface emissivity, and
+        surface temperature.
+    f_grid : array-like
+        Frequency grid [Hz] used for the radiative transfer simulations.
+    results_folder : str
+        Path to the folder where simulation results will be saved.
+    setup_name : str
+        Name identifier for the simulation setup, used to label output files
+        and the FluxSimulator instance.
+    export_results : bool, optional
+        If True, simulation results are exported to `results_folder`.
+        Default is True.
+    reverse_vertical_order : bool, optional
+        If True, the vertical ordering of the atmospheric layers is reversed
+        before the simulation. Default is True.
+    spectral_output : bool, optional
+        If True, spectral (per-frequency) output is included in the results.
+        Default is True.
+
+    Returns
+    -------
+    ds : xarray.Dataset
+        Dataset containing the simulated longwave fluxes (and optionally
+        spectral fluxes) for all atmospheric columns and variants.
+    FlxsimBatch : FluxSimulator
+        The FluxSimulator instance used for the batch simulation.
+    """
 
     #index solar_zenith_angle
     idx_sza=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'solar_zenith_angle' == str(gr)][0]
@@ -906,6 +962,43 @@ def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, expo
     return ds, FlxsimBatch
 
 def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True, spectral_output=True):
+    """
+    Run a batch of longwave (LW) radiative transfer simulations using ARTS.
+
+    Parameters
+    ----------
+    atms : list
+        List of atmospheric state tensors. Each element corresponds to one
+        atmospheric column and contains gridded atmospheric data (e.g., species
+        concentrations, altitude, temperature, pressure).
+    auxes : list
+        List of auxiliary data arrays corresponding to each atmospheric column.
+        Must include surface emissivity and surface temperature entries.
+    f_grid : array-like
+        Frequency grid [Hz] to use for the simulations.
+    results_folder : Path or str
+        Path to the root folder where results will be stored. A subdirectory
+        'LW' will be created (or used) within this folder.
+    setup_name : str
+        Name identifier for the ARTS simulation setup. Used to label the
+        FluxSimulator instance.
+    export_results : bool, optional
+        If True, export the results to disk as an xarray dataset. Default is True.
+    reverse_vertical_order : bool, optional
+        If True, reverse the vertical ordering of altitude, pressure, and flux
+        arrays so that they run from surface to TOA. Default is True.
+    spectral_output : bool, optional
+        If True, also store and export spectrally resolved fluxes at TOA and
+        surface. Default is True.
+
+    Returns
+    -------
+    ds : xarray.Dataset
+        Dataset containing the simulated longwave fluxes (and optionally
+        spectral fluxes) for all atmospheric columns and variants.
+    FlxsimBatch : FluxSimulator
+        The FluxSimulator instance used for the batch simulation.
+    """
 
     #index surface_emissivity
     idx_surf_emiss=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'surface_emissivity' == str(gr)][0]
