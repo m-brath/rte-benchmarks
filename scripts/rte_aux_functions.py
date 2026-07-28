@@ -414,7 +414,7 @@ def set_sun_position(SW_flxsim, sza, tsi, atm):
     SW_flxsim.ws.sunsChangeGeometry(distance=sun_dist, latitude=0, longitude=phi, index=0)
     SW_flxsim.scale_sun_to_specific_TSI_at_TOA(tsi, 0, 0, atm[1,-1,0,0])
 
-def export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder='', export_results=True):
+def export_to_xarray_spectral(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder='', export_results=True):
         # Create xarray dataset
     ds = xr.Dataset(
         {
@@ -439,10 +439,33 @@ def export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, resu
         if results_folder=='':
             results_folder=os.getcwd()
         os.makedirs(results_folder, exist_ok=True)
-        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_Nf{n_freqs}.nc'))
+        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_spectral_Nf{n_freqs}.nc'))
 
     return ds
 
+def export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder='', export_results=True):
+        # Create xarray dataset
+    ds = xr.Dataset(
+        {
+            'altitude': (['variant','level','column'], Result['altitude'], {'units': 'm'}),
+            'pressure': (['variant','level','column'], Result['pressure'], {'units': 'Pa'}),
+            'flux_clearsky_up': (['variant','level','column'], Result['flux_clearsky_up'], {'units': 'W/m^2'}),
+            'flux_clearsky_down': (['variant','level','column'], Result['flux_clearsky_down'], {'units': 'W/m^2'}),            
+        },
+        coords={
+            'variant': np.arange(N_variants),
+            'column': np.arange(N_cols),
+            'level': np.arange(n_levels),            
+        }
+    )
+
+    if export_results:
+        if results_folder=='':
+            results_folder=os.getcwd()
+        os.makedirs(results_folder, exist_ok=True)
+        ds.to_netcdf(os.path.join(results_folder, f'Reference_fluxes_Nf{n_freqs}.nc'))
+
+    return ds    
 
 
 def rte_benchmark_sw(data_in, aux_in, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
@@ -771,7 +794,7 @@ def calc_distance2matchTOATSI(SW_flxsim, atm, latitude, longitude, sza, tsi):
     return distance_new, phi
 
 
-def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True, spectral_output=True):
 
     #index solar_zenith_angle
     idx_sza=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'solar_zenith_angle' == str(gr)][0]
@@ -828,7 +851,7 @@ def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, expo
         geographical_positions,
         sun_positions,
         end_index=-1,
-        spectral_output=True
+        spectral_output=spectral_output
     )
 
     #len of atmospheres, levels and frequencies
@@ -844,10 +867,12 @@ def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, expo
     Result['pressure']=np.zeros((N_variants, n_levels, N_cols))
     Result['flux_clearsky_up']=np.zeros((N_variants,n_levels, N_cols))
     Result['flux_clearsky_down']=np.zeros((N_variants,n_levels, N_cols))
-    Result['spectral_flux_up_TOA']=np.zeros((N_variants,n_freqs, N_cols))    
-    Result['spectral_flux_down_TOA']=np.zeros((N_variants,n_freqs, N_cols))
-    Result['spectral_flux_up_SFC']=np.zeros((N_variants, n_freqs, N_cols))
-    Result['spectral_flux_down_SFC']=np.zeros((N_variants, n_freqs, N_cols))    
+
+    if spectral_output:
+        Result['spectral_flux_up_TOA']=np.zeros((N_variants,n_freqs, N_cols))    
+        Result['spectral_flux_down_TOA']=np.zeros((N_variants,n_freqs, N_cols))
+        Result['spectral_flux_up_SFC']=np.zeros((N_variants, n_freqs, N_cols))
+        Result['spectral_flux_down_SFC']=np.zeros((N_variants, n_freqs, N_cols))    
 
 
     # Fill the result arrays with the simulation results
@@ -865,18 +890,22 @@ def rte_benchmark_batch_sw(atms, auxes, f_grid, results_folder, setup_name, expo
             Result['pressure'][var_index, :, col_index]=results['array_of_pressure'][i]
             Result['flux_clearsky_up'][var_index, :, col_index]=results["array_of_flux_clearsky_up"][i]
             Result['flux_clearsky_down'][var_index, :, col_index]=results["array_of_flux_clearsky_down"][i]
-        Result['spectral_flux_up_TOA'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_up"][i][:,-1]
-        Result['spectral_flux_down_TOA'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_down"][i][:,-1]
-        Result['spectral_flux_up_SFC'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_up"][i][:,0]
-        Result['spectral_flux_down_SFC'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_down"][i][:,0]
+        if spectral_output:
+            Result['spectral_flux_up_TOA'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_up"][i][:,-1]
+            Result['spectral_flux_down_TOA'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_down"][i][:,-1]
+            Result['spectral_flux_up_SFC'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_up"][i][:,0]
+            Result['spectral_flux_down_SFC'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_down"][i][:,0]
 
 
     results_folder_SW=results_folder / 'SW'
-    ds=export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_SW, export_results)    
+    if spectral_output:
+        ds=export_to_xarray_spectral(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_SW, export_results)
+    else:
+        ds=export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_SW, export_results)    
 
     return ds, FlxsimBatch
 
-def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True):
+def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, export_results=True, reverse_vertical_order=True, spectral_output=True):
 
     #index surface_emissivity
     idx_surf_emiss=[idx for idx, gr in enumerate(auxes[0].grids[0]) if 'surface_emissivity' == str(gr)][0]
@@ -918,7 +947,7 @@ def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, expo
         geographical_positions,
         sun_positions,
         end_index=-1,
-        spectral_output=True
+        spectral_output=spectral_output
     )
 
     #len of atmospheres, levels and frequencies
@@ -934,10 +963,11 @@ def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, expo
     Result['pressure']=np.zeros((N_variants, n_levels, N_cols))
     Result['flux_clearsky_up']=np.zeros((N_variants,n_levels, N_cols))
     Result['flux_clearsky_down']=np.zeros((N_variants,n_levels, N_cols))
-    Result['spectral_flux_up_TOA']=np.zeros((N_variants,n_freqs, N_cols))    
-    Result['spectral_flux_down_TOA']=np.zeros((N_variants,n_freqs, N_cols))
-    Result['spectral_flux_up_SFC']=np.zeros((N_variants, n_freqs, N_cols))
-    Result['spectral_flux_down_SFC']=np.zeros((N_variants, n_freqs, N_cols))    
+    if spectral_output:
+        Result['spectral_flux_up_TOA']=np.zeros((N_variants,n_freqs, N_cols))    
+        Result['spectral_flux_down_TOA']=np.zeros((N_variants,n_freqs, N_cols))
+        Result['spectral_flux_up_SFC']=np.zeros((N_variants, n_freqs, N_cols))
+        Result['spectral_flux_down_SFC']=np.zeros((N_variants, n_freqs, N_cols))    
 
     # Fill the result arrays with the simulation results
     for i, (atm, aux) in enumerate(zip(atms, auxes)):
@@ -954,13 +984,17 @@ def rte_benchmark_batch_lw(atms, auxes, f_grid, results_folder, setup_name, expo
             Result['pressure'][var_index, :, col_index]=results['array_of_pressure'][i]
             Result['flux_clearsky_up'][var_index, :, col_index]=results["array_of_flux_clearsky_up"][i]
             Result['flux_clearsky_down'][var_index, :, col_index]=results["array_of_flux_clearsky_down"][i]
-        Result['spectral_flux_up_TOA'][var_index,:, col_index]=results["array_of_spectral_flux_clearsky_up"][i][:,-1]
-        Result['spectral_flux_down_TOA'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_down"][i][:,-1]
-        Result['spectral_flux_up_SFC'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_up"][i][:,0]
-        Result['spectral_flux_down_SFC'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_down"][i][:,0]
+        if spectral_output:
+            Result['spectral_flux_up_TOA'][var_index,:, col_index]=results["array_of_spectral_flux_clearsky_up"][i][:,-1]
+            Result['spectral_flux_down_TOA'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_down"][i][:,-1]
+            Result['spectral_flux_up_SFC'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_up"][i][:,0]
+            Result['spectral_flux_down_SFC'][var_index, :, col_index]=results["array_of_spectral_flux_clearsky_down"][i][:,0]
         
 
     results_folder_LW=results_folder / 'LW' 
-    ds=export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_LW, export_results)    
+    if spectral_output:
+        ds=export_to_xarray_spectral(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_LW, export_results)
+    else:
+        ds=export_to_xarray(Result, N_variants, N_cols, n_levels, n_freqs, f_grid, results_folder_LW, export_results)    
 
     return ds, FlxsimBatch
