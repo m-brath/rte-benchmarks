@@ -1,0 +1,13 @@
+name: rte-benchmarks
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.12
+  - numpy
+  - scipy
+  - xarray
+  - netcdf4
+  - pyarts>=2.6.16
+  - pip
+  - pip:
+        - pyarts-fluxes>=0.6
