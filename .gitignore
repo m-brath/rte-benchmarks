@@ -1,6 +1,6 @@
 *__pycache__*
 data/*.xml*
-results/**/*.nc
+results/**/**/*spectral*.nc
 
 .DS_Store
 .vscode/*
