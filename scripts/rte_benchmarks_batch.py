@@ -52,6 +52,9 @@ export_results = True
 # export spectral output
 spectral_output = False
 
+#Number of streams for the RTE solver (up and down together)
+number_of_streams = 10
+
 # =============================================================================
 # %% load data
 # =============================================================================
@@ -87,6 +90,7 @@ for setup in setups:
         f_grid_sw,
         results_folder_setup,
         setup,
+        number_of_streams=number_of_streams,
         export_results=export_results,
         spectral_output=spectral_output,
     )
@@ -96,6 +100,7 @@ for setup in setups:
         f_grid_lw,
         results_folder_setup,
         setup,
+        number_of_streams=number_of_streams,
         export_results=export_results,
         spectral_output=spectral_output,
     )

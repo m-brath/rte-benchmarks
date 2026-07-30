@@ -544,6 +544,7 @@ def rte_benchmark_sw(
     f_grid,
     results_folder,
     setup_name,
+    number_of_streams=10,
     export_results=True,
     reverse_vertical_order=True,
     spectral_output=True,
@@ -562,6 +563,9 @@ def rte_benchmark_sw(
         Path to folder for saving results.
     setup_name : str
         Name of the setup/scenario.
+    number_of_streams : int, optional
+        Number of streams for the RTE solver, up and down combined
+        (default: 10).
     export_results : bool, optional
         Whether to export results to NetCDF file (default: True).
     reverse_vertical_order : bool, optional
@@ -591,6 +595,9 @@ def rte_benchmark_sw(
 
     # create FSM-object
     Flxsim = fsm.FluxSimulator(setup_name + "_SW")
+
+    # Set number of streams for the RTE solver (up and down together)
+    Flxsim.nstreams = number_of_streams
 
     # add absorption species
     abs_species = define_abs_species(Flxsim, species_list_of_data)
@@ -771,6 +778,7 @@ def rte_benchmark_lw(
     f_grid,
     results_folder,
     setup_name,
+    number_of_streams=10,
     export_results=True,
     reverse_vertical_order=True,
     spectral_output=True,
@@ -789,6 +797,9 @@ def rte_benchmark_lw(
         Path to folder for saving results.
     setup_name : str
         Name of the setup/scenario.
+    number_of_streams : int, optional
+        Number of streams for the RTE solver, up and down combined
+        (default: 10).
     export_results : bool, optional
         Whether to export results to NetCDF file (default: True).
     reverse_vertical_order : bool, optional
@@ -818,6 +829,9 @@ def rte_benchmark_lw(
 
     # create FSM-object
     Flxsim = fsm.FluxSimulator(setup_name + "_LW")
+
+    # Set number of streams for the RTE solver (up and down together)
+    Flxsim.nstreams = number_of_streams
 
     # add absorption species
     abs_species = define_abs_species(Flxsim, species_list_of_data)
@@ -1008,6 +1022,7 @@ def rte_benchmark_batch_sw(
     f_grid,
     results_folder,
     setup_name,
+    number_of_streams=10,
     export_results=True,
     reverse_vertical_order=True,
     spectral_output=True,
@@ -1031,6 +1046,9 @@ def rte_benchmark_batch_sw(
     setup_name : str
         Name identifier for the simulation setup, used to label output files
         and the FluxSimulator instance.
+    number_of_streams : int, optional
+        Number of streams for the RTE solver, up and down combined
+        (default: 10).
     export_results : bool, optional
         If True, simulation results are exported to `results_folder`.
         Default is True.
@@ -1090,6 +1108,10 @@ def rte_benchmark_batch_sw(
     # setup ARTS
     FlxsimBatch = fsm.FluxSimulator(setup_name + "_Batch_SW")
     FlxsimBatch.set_frequency_grid(f_grid)
+
+    # Set number of streams for the RTE solver (up and down together)
+    FlxsimBatch.nstreams = number_of_streams
+
 
     # some data preparations
     surface_altitudes = [atm[1, 0, 0, 0] for atm in atms]
@@ -1223,6 +1245,7 @@ def rte_benchmark_batch_lw(
     f_grid,
     results_folder,
     setup_name,
+    number_of_streams=10,
     export_results=True,
     reverse_vertical_order=True,
     spectral_output=True,
@@ -1247,6 +1270,9 @@ def rte_benchmark_batch_lw(
     setup_name : str
         Name identifier for the ARTS simulation setup. Used to label the
         FluxSimulator instance.
+    number_of_streams : int, optional
+        Number of streams for the RTE solver, up and down combined
+        (default: 10).
     export_results : bool, optional
         If True, export the results to disk as an xarray dataset. Default is True.
     reverse_vertical_order : bool, optional
@@ -1291,6 +1317,9 @@ def rte_benchmark_batch_lw(
     # setup ARTS
     FlxsimBatch = fsm.FluxSimulator(setup_name + "_Batch_LW")
     FlxsimBatch.set_frequency_grid(f_grid)
+
+    # Set number of streams for the RTE solver (up and down together)
+    FlxsimBatch.nstreams = number_of_streams
 
     # some data preparations
     surface_altitudes = [atm[1, 0, 0, 0] for atm in atms]
