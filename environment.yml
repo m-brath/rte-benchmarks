@@ -1,5 +1,6 @@
 name: rte-benchmarks
 channels:
+  - rttools
   - conda-forge
 dependencies:
   - python>=3.12
@@ -7,7 +8,9 @@ dependencies:
   - scipy
   - xarray
   - netcdf4
+  - libnetcdf<4.10
   - pyarts>=2.6.16
   - pip
   - pip:
-        - pyarts-fluxes>=0.6
+        # PyPI/egg name is fluxsimulator, not pyarts-fluxes
+        - "fluxsimulator @ git+https://github.com/atmtools/pyarts-fluxes.git@main"
