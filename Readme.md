@@ -2,6 +2,10 @@
 
 Radiative Transfer Equation (RTE) benchmarks using [ARTS](https://www.radiativetransfer.org/) (Atmospheric Radiative Transfer Simulator). The benchmarks compute broadband shortwave (SW) and longwave (LW) radiative fluxes for several standard atmospheric test cases and compare them against reference flux data.
 
+## Version
+
+v1.0
+
 ## Test Cases
 
 | Setup     | Description                                                                 |
