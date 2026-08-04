@@ -29,7 +29,6 @@ results_folder = script_dir.parent / "results/"
 
 # Define frequencies (wavenumbers) longwave
 # wavenumber range taken from DDQ paper
-# but using log spacing
 wvn_min_lw = 10.0  # cm^-1
 wvn_max_lw = 1 / 2e-6 / 100  # cm^-1
 N_wvn_lw = 100
