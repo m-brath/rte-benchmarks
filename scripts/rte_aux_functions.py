@@ -649,11 +649,11 @@ def rte_benchmark_sw(
         if "total_solar_irradiance" == str(gr)
     ][0]
 
-    # index surface_emissivity
-    idx_surf_emiss = [
+    # index surface_albedo
+    idx_surf_albedo = [
         idx
         for idx, gr in enumerate(aux_in[0].grids[0])
-        if "surface_emissivity" == str(gr)
+        if "surface_albedo" == str(gr)
     ][0]
 
     # index surface_temperature
@@ -674,7 +674,7 @@ def rte_benchmark_sw(
         # surface vavariables
         surface_temperature = aux.data[idx_surf_temp]
         surface_altitude = atm.data[1, 0, 0, 0]
-        surface_reflectivity_sw = 1 - aux.data[idx_surf_emiss]
+        surface_reflectivity_sw = aux.data[idx_surf_albedo]
 
         # Solar zenith angle and total solar irradiance of scenario
         sza = aux.data[idx_sza]
@@ -1082,11 +1082,11 @@ def rte_benchmark_batch_sw(
         if "total_solar_irradiance" == str(gr)
     ][0]
 
-    # index surface_emissivity
-    idx_surf_emiss = [
+    # index surface_albedo
+    idx_surf_albedo = [
         idx
         for idx, gr in enumerate(auxes[0].grids[0])
-        if "surface_emissivity" == str(gr)
+        if "surface_albedo" == str(gr)
     ][0]
 
     # index surface_temperature
@@ -1117,7 +1117,7 @@ def rte_benchmark_batch_sw(
     surface_altitudes = [atm[1, 0, 0, 0] for atm in atms]
     surface_tempratures = [aux[idx_surf_temp] for aux in auxes]
     geographical_positions = [[0, 0] for aux_i in auxes]
-    surface_reflectivities = [[1 - aux[idx_surf_emiss]] for aux in auxes]
+    surface_reflectivities = [[aux[idx_surf_albedo]] for aux in auxes]
 
     # calc solar distance and longitudes to match TSI
     FlxsimBatch.set_sun()
