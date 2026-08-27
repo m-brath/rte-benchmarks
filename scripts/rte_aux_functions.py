@@ -552,6 +552,48 @@ def export_to_xarray(
 
     return ds
 
+def _allocate_result_arrays(N_variants, n_levels, N_cols, n_freqs, spectral_output, sw=False):
+    """Allocate NumPy arrays for the benchmark result fields.
+        (internal helper function)
+
+    Parameters
+    ----------
+    N_variants : int
+        Number of model variants to store.
+    n_levels : int
+        Number of vertical atmospheric levels.
+    N_cols : int
+        Number of columns in the input dataset.
+    n_freqs : int
+        Number of frequency bins for spectrally resolved outputs.
+    spectral_output : bool
+        If True, allocate arrays for the spectral TOA and surface fluxes.
+    sw : bool, optional
+        If True, also allocate the direct downward shortwave irradiance array.
+
+    Returns
+    -------
+    dict
+        Dictionary of zero-initialized result arrays keyed by diagnostic name.
+    """
+
+    Result = {}
+    Result["altitude"] = np.zeros((N_variants, n_levels, N_cols))
+    Result["pressure"] = np.zeros((N_variants, n_levels, N_cols))
+    Result["flux_clearsky_up"] = np.zeros((N_variants, n_levels, N_cols))
+    Result["flux_clearsky_down"] = np.zeros((N_variants, n_levels, N_cols))
+
+    if sw:
+        Result["Direct_downward_irradiance"] = np.zeros((N_variants, n_levels, N_cols))
+
+    if spectral_output:
+        Result["spectral_flux_up_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
+        Result["spectral_flux_down_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
+        Result["spectral_flux_up_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
+        Result["spectral_flux_down_SFC"] = np.zeros((N_variants, n_freqs, N_cols))  
+
+    return Result
+
 
 def rte_benchmark_sw(
     data_in,
@@ -614,6 +656,9 @@ def rte_benchmark_sw(
     # Set number of streams for the RTE solver (up and down together)
     Flxsim.nstreams = number_of_streams
 
+    # Set the disort auxiliary variable to be returned by the FluxSimulator
+    Flxsim.ws.disort_aux_vars = ["Direct downward spectral irradiance"]
+
     # add absorption species
     abs_species = define_abs_species(Flxsim, species_list_of_data)
     Flxsim.add_species(abs_species, verbose=True)
@@ -639,16 +684,8 @@ def rte_benchmark_sw(
     n_freqs = len(f_grid)
 
     # Allocate result arrays
-    Result = {}
-    Result["altitude"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["pressure"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["flux_clearsky_up"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["flux_clearsky_down"] = np.zeros((N_variants, n_levels, N_cols))
-    if spectral_output:
-        Result["spectral_flux_up_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_up_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
+    Result = _allocate_result_arrays(N_variants, n_levels, N_cols,
+                                      n_freqs, spectral_output, sw=True)   
 
     # index solar_zenith_angle
     idx_sza = [
@@ -718,43 +755,51 @@ def rte_benchmark_sw(
         )
         # we set the geographical_position to 0,0 because we want to mimic the RFMIP sza
 
+        #calculate direct downward irradiance
+        spectral_solar_flux=results["aux_var_clearsky"][0] 
+        solar_flux=np.trapezoid(spectral_solar_flux[:,:],f_grid , axis=0)
+
+
         column_index = int(aux.data[idx_col])
         variant_index = int(aux.data[idx_var])
 
         if reverse_vertical_order:
-            Result["altitude"][variant_index, :, column_index, :] = results["altitude"][
+            Result["altitude"][variant_index, :, column_index] = results["altitude"][
                 ::-1
             ]
-            Result["pressure"][variant_index, :, column_index, :] = results["pressure"][
+            Result["pressure"][variant_index, :, column_index] = results["pressure"][
                 ::-1
             ]
-            Result["flux_clearsky_up"][variant_index, :, column_index, :] = results[
+            Result["flux_clearsky_up"][variant_index, :, column_index] = results[
                 "flux_clearsky_up"
             ][::-1]
-            Result["flux_clearsky_down"][variant_index, :, column_index, :] = results[
+            Result["flux_clearsky_down"][variant_index, :, column_index] = results[
                 "flux_clearsky_down"
             ][::-1]
+            Result["Direct_downward_irradiance"][variant_index, :, column_index] = solar_flux[::-1]
+
         else:
-            Result["altitude"][variant_index, :, column_index, :] = results["altitude"]
-            Result["pressure"][variant_index, :, column_index, :] = results["pressure"]
-            Result["flux_clearsky_up"][variant_index, :, column_index, :] = results[
+            Result["altitude"][variant_index, :, column_index] = results["altitude"]
+            Result["pressure"][variant_index, :, column_index] = results["pressure"]
+            Result["flux_clearsky_up"][variant_index, :, column_index] = results[
                 "flux_clearsky_up"
             ]
-            Result["flux_clearsky_down"][variant_index, :, column_index, :] = results[
+            Result["flux_clearsky_down"][variant_index, :, column_index] = results[
                 "flux_clearsky_down"
             ]
+            Result["Direct_downward_irradiance"][variant_index, :, column_index] = solar_flux
 
         if spectral_output:
-            Result["spectral_flux_up_TOA"][variant_index, :, column_index, :] = results[
+            Result["spectral_flux_up_TOA"][variant_index, :, column_index] = results[
                 "spectral_flux_clearsky_up"
             ][:, -1]
-            Result["spectral_flux_down_TOA"][variant_index, :, column_index, :] = (
+            Result["spectral_flux_down_TOA"][variant_index, :, column_index] = (
                 results["spectral_flux_clearsky_down"][:, -1]
             )
-            Result["spectral_flux_up_SFC"][variant_index, :, column_index, :] = results[
+            Result["spectral_flux_up_SFC"][variant_index, :, column_index] = results[
                 "spectral_flux_clearsky_up"
             ][:, 0]
-            Result["spectral_flux_down_SFC"][variant_index, :, column_index, :] = (
+            Result["spectral_flux_down_SFC"][variant_index, :, column_index] = (
                 results["spectral_flux_clearsky_down"][:, 0]
             )
 
@@ -869,16 +914,8 @@ def rte_benchmark_lw(
     n_freqs = len(f_grid)
 
     # Allocate result arrays
-    Result = {}
-    Result["altitude"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["pressure"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["flux_clearsky_up"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["flux_clearsky_down"] = np.zeros((N_variants, n_levels, N_cols))
-    if spectral_output:
-        Result["spectral_flux_up_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_up_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
+    Result = _allocate_result_arrays(N_variants, n_levels, N_cols,
+                                      n_freqs, spectral_output, sw=False)   
 
     # index surface_emissivity
     idx_surf_emiss = [
@@ -1126,6 +1163,8 @@ def rte_benchmark_batch_sw(
 
     # Set number of streams for the RTE solver (up and down together)
     FlxsimBatch.nstreams = number_of_streams
+
+    # Set the disort auxiliary variable to be returned by the FluxSimulator
     FlxsimBatch.ws.disort_aux_vars = ["Direct downward spectral irradiance"]
 
 
@@ -1177,19 +1216,8 @@ def rte_benchmark_batch_sw(
     # get number of columns and variants in the input data
     N_cols, N_variants, idx_col, idx_var = get_Ncols_and_Nvariants(auxes)
 
-    # Allocate result arrays
-    Result = {}
-    Result["altitude"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["pressure"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["flux_clearsky_up"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["flux_clearsky_down"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["Direct_downward_irradiance"] = np.zeros((N_variants, n_levels, N_cols))
-
-    if spectral_output:
-        Result["spectral_flux_up_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_up_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_SFC"] = np.zeros((N_variants, n_freqs, N_cols))        
+    Result = _allocate_result_arrays(N_variants, n_levels, N_cols,
+                                      n_freqs, spectral_output, sw=True)         
 
     # Fill the result arrays with the simulation results
     for i, (atm, aux) in enumerate(zip(atms, auxes)):
@@ -1381,16 +1409,8 @@ def rte_benchmark_batch_lw(
     N_cols, N_variants, idx_col, idx_var = get_Ncols_and_Nvariants(auxes)
 
     # Allocate result arrays
-    Result = {}
-    Result["altitude"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["pressure"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["flux_clearsky_up"] = np.zeros((N_variants, n_levels, N_cols))
-    Result["flux_clearsky_down"] = np.zeros((N_variants, n_levels, N_cols))
-    if spectral_output:
-        Result["spectral_flux_up_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_up_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
+    Result = _allocate_result_arrays(N_variants, n_levels, N_cols,
+                                          n_freqs, spectral_output, sw=True)   
 
     # Fill the result arrays with the simulation results
     for i, (atm, aux) in enumerate(zip(atms, auxes)):
