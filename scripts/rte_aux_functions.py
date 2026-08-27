@@ -1111,6 +1111,7 @@ def rte_benchmark_batch_sw(
 
     # Set number of streams for the RTE solver (up and down together)
     FlxsimBatch.nstreams = number_of_streams
+    FlxsimBatch.ws.disort_aux_vars = ["Direct downward spectral irradiance"]
 
 
     # some data preparations
@@ -1147,6 +1148,13 @@ def rte_benchmark_batch_sw(
         spectral_output=spectral_output,
     )
 
+    #calculate direct downward irradiance
+    spectral_solar_flux=results["array_of_Direct_downward_spectral_irradiance_clearsky"] 
+    solar_flux=[[]]*len(spectral_solar_flux)
+    for i in range(len(spectral_solar_flux)):
+        solar_flux[i]=-np.trapezoid(spectral_solar_flux[i][:,:],f_grid , axis=0)
+
+
     # len of atmospheres, levels and frequencies
     n_levels = len(atms[0].grids[1].value)
     n_freqs = len(f_grid)
@@ -1160,12 +1168,13 @@ def rte_benchmark_batch_sw(
     Result["pressure"] = np.zeros((N_variants, n_levels, N_cols))
     Result["flux_clearsky_up"] = np.zeros((N_variants, n_levels, N_cols))
     Result["flux_clearsky_down"] = np.zeros((N_variants, n_levels, N_cols))
+    Result["Direct_downward_irradiance"] = np.zeros((N_variants, n_levels, N_cols))
 
     if spectral_output:
         Result["spectral_flux_up_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
         Result["spectral_flux_down_TOA"] = np.zeros((N_variants, n_freqs, N_cols))
         Result["spectral_flux_up_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
-        Result["spectral_flux_down_SFC"] = np.zeros((N_variants, n_freqs, N_cols))
+        Result["spectral_flux_down_SFC"] = np.zeros((N_variants, n_freqs, N_cols))        
 
     # Fill the result arrays with the simulation results
     for i, (atm, aux) in enumerate(zip(atms, auxes)):
@@ -1185,6 +1194,8 @@ def rte_benchmark_batch_sw(
             Result["flux_clearsky_down"][var_index, :, col_index] = results[
                 "array_of_flux_clearsky_down"
             ][i][::-1]
+            Result["Direct_downward_irradiance"][var_index, :, col_index] = solar_flux[i][::-1]
+            
         else:
             Result["altitude"][var_index, :, col_index] = results["array_of_altitude"][
                 i
@@ -1198,6 +1209,7 @@ def rte_benchmark_batch_sw(
             Result["flux_clearsky_down"][var_index, :, col_index] = results[
                 "array_of_flux_clearsky_down"
             ][i]
+            Result["Direct_downward_irradiance"][var_index, :, col_index] = solar_flux[i]
         if spectral_output:
             Result["spectral_flux_up_TOA"][var_index, :, col_index] = results[
                 "array_of_spectral_flux_clearsky_up"
