@@ -37,7 +37,7 @@ scripts/         # Python scripts and helper modules
 ## Dependencies
 
 - [pyarts](https://github.com/atmtools/arts) — ARTS Python interface
-- [pyarts-fluxes >= 0.7](https://github.com/atmtools/pyarts-fluxes) — flux computation
+- [pyarts-fluxes >= 0.8](https://github.com/atmtools/pyarts-fluxes) — flux computation
 - numpy, scipy, xarray
 
 ## Workflow
