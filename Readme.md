@@ -4,7 +4,7 @@ Radiative Transfer Equation (RTE) benchmarks using [ARTS](https://www.radiativet
 
 ## Version
 
-v1.1
+v1.2
 
 ## Test Cases
 
