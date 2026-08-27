@@ -477,6 +477,13 @@ def export_to_xarray_spectral(
         },
     )
 
+    if 'Direct_downward_irradiance' in Result:
+        ds["direct_downward_irradiance"] = (
+            ["variant", "level", "column"],
+            Result["Direct_downward_irradiance"],
+            {"units": "W/m^2"},
+        )
+
     if export_results:
         if results_folder == "":
             results_folder = os.getcwd()
@@ -528,6 +535,14 @@ def export_to_xarray(
             "level": np.arange(n_levels),
         },
     )
+
+    if 'Direct_downward_irradiance' in Result:
+        ds["direct_downward_irradiance"] = (
+            ["variant", "level", "column"],
+            Result["Direct_downward_irradiance"],
+            {"units": "W/m^2"},
+        )
+
 
     if export_results:
         if results_folder == "":
@@ -1152,7 +1167,7 @@ def rte_benchmark_batch_sw(
     spectral_solar_flux=results["array_of_Direct_downward_spectral_irradiance_clearsky"] 
     solar_flux=[[]]*len(spectral_solar_flux)
     for i in range(len(spectral_solar_flux)):
-        solar_flux[i]=-np.trapezoid(spectral_solar_flux[i][:,:],f_grid , axis=0)
+        solar_flux[i]=np.trapezoid(spectral_solar_flux[i][:,:],f_grid , axis=0)
 
 
     # len of atmospheres, levels and frequencies
