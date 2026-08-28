@@ -32,6 +32,7 @@ scripts/         # Python scripts and helper modules
 | `convert_rte-examples2arts2.py` | Convert rte-examples netCDF data to ARTS `ArrayOfGriddedField4` XML      |
 | `rte_benchmarks.py`             | Run single-profile SW/LW benchmark simulations (slower, more flexible to adjust outputs) |
 | `rte_benchmarks_batch.py`       | Run batch SW/LW benchmark simulations (faster, less flexible)     |
+| `rte_benchmarks_overview.py`    | Generate comprehensive flux analysis plots and statistics                |
 | `rte_aux_functions.py`          | Auxiliary functions (thermodynamics, unit conversions, flux computations) |
 
 ## Dependencies
@@ -68,6 +69,24 @@ python rte_benchmarks_batch.py
 ```
 
 Results are written to `results/<setup>/LW/` and `results/<setup>/SW/` as NetCDF files.
+
+### 3. Generate Analysis Plots
+
+Generate comprehensive visualization plots showing flux distributions and statistics:
+
+```bash
+python rte_benchmarks_overview.py
+```
+
+This script:
+- Loads computed reference flux data from NetCDF files
+- Computes mean and standard deviation profiles for all flux variables
+- Creates altitude-stratified flux distributions via 2D histograms
+- Generates a 2x3 subplot figure per setup and radiation type showing:
+  - Mean upwelling/downwelling flux profiles
+  - Flux variability (standard deviation) with altitude
+  - 2D histograms of flux vs. altitude distributions
+- Saves high-resolution PDF plots to `plots/overview_<setup>_<radtype>.pdf`
 
 ## Author
 
