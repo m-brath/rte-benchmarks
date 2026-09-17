@@ -1410,7 +1410,7 @@ def rte_benchmark_batch_lw(
 
     # Allocate result arrays
     Result = _allocate_result_arrays(N_variants, n_levels, N_cols,
-                                          n_freqs, spectral_output, sw=True)   
+                                          n_freqs, spectral_output, sw=False)   
 
     # Fill the result arrays with the simulation results
     for i, (atm, aux) in enumerate(zip(atms, auxes)):
