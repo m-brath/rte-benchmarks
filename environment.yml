@@ -9,8 +9,8 @@ dependencies:
   - xarray
   - netcdf4
   - libnetcdf<4.10
-  - pyarts>=2.6.16
+  - pyarts>=2.6.20
   - pip
   - pip:
         # PyPI/egg name is fluxsimulator, not pyarts-fluxes
-        - "fluxsimulator @ git+https://github.com/atmtools/pyarts-fluxes.git@main"
+        - "fluxsimulator @ git+https://github.com/atmtools/pyarts-fluxes.git@v0.9"
